@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>BodyLog（体組成ログ）</title>
+
+  <meta name="theme-color" content="#0f766e" />
+  <meta name="description" content="体組成ログ（CSVインポート・日々入力・編集・グラフ）。端末内保存、オフライン対応PWA。" />
+
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+  <link rel="stylesheet" href="./styles.css" />
+
+  <!-- Chart.js (CDN) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script defer src="./app.js"></script>
+</head>
+
+<body>
+  <header class="app-header">
+    <div class="title">
+      <div class="app-name">BodyLog</div>
+      <div class="app-sub">体組成ログ（端末内保存 / オフライン対応）</div>
+    </div>
+
+    <div class="header-actions">
+      <button id="btnHelp" class="btn btn-ghost" type="button">ヘルプ</button>
+      <button id="btnBackup" class="btn btn-ghost" type="button">バックアップ</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Notices -->
+    <section aria-live="polite" class="notices">
+      <div id="notice" class="notice hidden"></div>
+    </section>
+
+    <!-- Dashboard -->
+    <section class="card">
+      <div class="card-header">
+        <h2>ダッシュボード</h2>
+        <div class="muted" id="dbStatus">保存先：IndexedDB</div>
+      </div>
+
+      <div class="grid2">
+        <div class="stat">
+          <div class="stat-label">直近7日平均（体重）</div>
+          <div class="stat-value" id="avg7Weight">—</div>
+          <div class="stat-sub" id="avg7WeightDelta">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">最新の記録日</div>
+          <div class="stat-value" id="latestDate">—</div>
+          <div class="stat-sub" id="latestSummary">—</div>
+        </div>
+      </div>
+
+      <p class="muted small" id="factComment">—</p>
+    </section>
+
+    <!-- Input -->
+    <section class="card">
+      <div class="card-header">
+        <h2>今日の入力</h2>
+        <div class="muted small" id="prevHint">前回値：—</div>
+      </div>
+
+      <form id="entryForm" class="form" autocomplete="off">
+        <div class="form-row">
+          <label>日付</label>
+          <input id="fDate" type="date" required />
+        </div>
+
+        <div class="form-row with-stepper">
+          <label>体重 (kg)</label>
+          <div class="stepper">
+            <button class="btn btn-step" type="button" data-step-field="weight_kg" data-step="-0.1">−0.1</button>
+            <input id="fWeight" inputmode="decimal" placeholder="例: 55.0" />
+            <button class="btn btn-step" type="button" data-step-field="weight_kg" data-step="0.1">+0.1</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>BMI</label>
+          <input id="fBmi" inputmode="decimal" placeholder="例: 19.8" />
+        </div>
+
+        <div class="form-row with-stepper">
+          <label>体脂肪率 (%)</label>
+          <div class="stepper">
+            <button class="btn btn-step" type="button" data-step-field="body_fat_pct" data-step="-0.1">−0.1</button>
+            <input id="fFat" inputmode="decimal" placeholder="例: 16.8" />
+            <button class="btn btn-step" type="button" data-step-field="body_fat_pct" data-step="0.1">+0.1</button>
+          </div>
+        </div>
+
+        <div class="form-row with-stepper">
+          <label>筋肉量 (kg)</label>
+          <div class="stepper">
+            <button class="btn btn-step" type="button" data-step-field="muscle_kg" data-step="-0.1">−0.1</button>
+            <input id="fMuscle" inputmode="decimal" placeholder="例: 43.4" />
+            <button class="btn btn-step" type="button" data-step-field="muscle_kg" data-step="0.1">+0.1</button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>内臓脂肪</label>
+          <input id="fVisceral" inputmode="decimal" placeholder="例: 8.5" />
+        </div>
+
+        <div class="form-row">
+          <label>基礎代謝量 (kcal)</label>
+          <input id="fBmr" inputmode="numeric" placeholder="例: 1228" />
+        </div>
+
+        <div class="form-row">
+          <label>体内年齢</label>
+          <input id="fBodyAge" inputmode="numeric" placeholder="例: 44" />
+        </div>
+
+        <div class="form-row">
+          <label>メモ（任意）</label>
+          <input id="fMemo" placeholder="例: 眠気強め、塩分多め等" />
+        </div>
+
+        <div class="form-actions">
+          <button id="btnSave" class="btn btn-primary" type="submit">保存</button>
+          <button id="btnDelete" class="btn btn-danger hidden" type="button">削除</button>
+          <button id="btnClearForm" class="btn btn-ghost" type="button">入力クリア</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Import/Export -->
+    <section class="card">
+      <div class="card-header">
+        <h2>CSV</h2>
+        <div class="muted small">体組成CSVのインポート / エクスポート</div>
+      </div>
+
+      <div class="actions-row">
+        <label class="file">
+          <input id="csvFile" type="file" accept=".csv,text/csv" />
+          <span class="btn btn-ghost">CSVインポート</span>
+        </label>
+
+        <button id="btnExportCsv" class="btn btn-ghost" type="button">CSVエクスポート</button>
+      </div>
+
+      <div id="importResult" class="import-result hidden"></div>
+
+      <details class="small">
+        <summary>文字コードの注意（Shift-JIS）</summary>
+        <div class="muted">
+          基本はUTF-8想定。読み込みに失敗しそうな場合は、自動でShift-JISデコードを試します。うまくいかないときは、CSVをUTF-8で保存し直してください。
+        </div>
+      </details>
+    </section>
+
+    <!-- List -->
+    <section class="card">
+      <div class="card-header">
+        <h2>記録一覧</h2>
+
+        <div class="list-controls">
+          <div class="control">
+            <label class="muted small">期間</label>
+            <select id="rangeSelect">
+              <option value="all">全期間</option>
+              <option value="90">90日</option>
+              <option value="30">30日</option>
+              <option value="7">7日</option>
+            </select>
+          </div>
+
+          <div class="control">
+            <label class="muted small">並び</label>
+            <button id="btnSort" class="btn btn-ghost btn-small" type="button">日付：降順</button>
+          </div>
+
+          <div class="control">
+            <label class="muted small">検索</label>
+            <input id="searchInput" class="input-small" placeholder="メモ検索（任意）" />
+          </div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table" id="recordsTable">
+          <thead>
+            <tr>
+              <th>日付</th>
+              <th>体重</th>
+              <th>体脂肪</th>
+              <th>筋肉</th>
+              <th>内臓</th>
+              <th>基礎代謝</th>
+              <th>体内年齢</th>
+            </tr>
+          </thead>
+          <tbody id="recordsTbody">
+            <tr><td colspan="7" class="muted">データがありません</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="muted small">行をタップすると編集できます。</div>
+    </section>
+
+    <!-- Chart -->
+    <section class="card">
+      <div class="card-header">
+        <h2>グラフ</h2>
+        <div class="chart-controls">
+          <label class="chk"><input id="chkWeight" type="checkbox" checked /> 体重</label>
+          <label class="chk"><input id="chkFat" type="checkbox" checked /> 体脂肪率</label>
+          <label class="chk"><input id="chkMuscle" type="checkbox" checked /> 筋肉量</label>
+          <label class="chk"><input id="chkMA7" type="checkbox" /> 7日移動平均</label>
+        </div>
+      </div>
+
+      <div class="canvas-wrap">
+        <canvas id="chart" height="220"></canvas>
+      </div>
+
+      <div class="muted small">
+        単日の上下ではなく、期間の流れを確認する用途です。
+      </div>
+    </section>
+
+    <!-- Help Modal -->
+    <dialog id="helpDialog" class="dialog">
+      <div class="dialog-header">
+        <h3>ヘルプ</h3>
+        <button class="btn btn-ghost btn-small" id="btnHelpClose" type="button">閉じる</button>
+      </div>
+
+      <div class="dialog-body">
+        <h4>インストール（ホーム画面追加）</h4>
+        <ul>
+          <li><b>Android（Chrome）</b>：右上メニュー →「ホーム画面に追加」または「アプリをインストール」</li>
+          <li><b>iPhone（Safari）</b>：共有 →「ホーム画面に追加」</li>
+        </ul>
+
+        <h4>保存</h4>
+        <div class="muted">
+          データは端末内（IndexedDB）に保存します。外部送信しません。バックアップのためにCSVエクスポートを定期的に推奨します。
+        </div>
+
+        <h4>CSVインポートの衝突</h4>
+        <div class="muted">
+          同じ日付が既にある場合、「上書き / スキップ / 差分確認」の選択ができます。
+        </div>
+      </div>
+    </dialog>
+
+    <!-- Backup Modal -->
+    <dialog id="backupDialog" class="dialog">
+      <div class="dialog-header">
+        <h3>バックアップ</h3>
+        <button class="btn btn-ghost btn-small" id="btnBackupClose" type="button">閉じる</button>
+      </div>
+
+      <div class="dialog-body">
+        <div class="actions-row">
+          <button id="btnExportJson" class="btn btn-ghost" type="button">JSONエクスポート</button>
+          <label class="file">
+            <input id="jsonFile" type="file" accept=".json,application/json" />
+            <span class="btn btn-ghost">JSONインポート</span>
+          </label>
+        </div>
+        <div class="muted small">
+          JSONはアプリ内部形式の完全バックアップ用途です。CSVは表計算・他アプリ連携用途です。
+        </div>
+      </div>
+    </dialog>
+
+    <!-- Import Conflict Dialog -->
+    <dialog id="conflictDialog" class="dialog dialog-wide">
+      <div class="dialog-header">
+        <h3>CSV衝突の処理</h3>
+        <button class="btn btn-ghost btn-small" id="btnConflictClose" type="button">閉じる</button>
+      </div>
+
+      <div class="dialog-body">
+        <div class="conflict-toolbar">
+          <div class="muted small">同じ日付が存在します。扱いを選択してください。</div>
+          <div class="conflict-actions">
+            <select id="conflictDefault">
+              <option value="overwrite">上書き</option>
+              <option value="skip">スキップ</option>
+              <option value="review">差分確認</option>
+            </select>
+            <button id="btnApplyDefault" class="btn btn-ghost btn-small" type="button">全行に適用</button>
+            <button id="btnResolve" class="btn btn-primary btn-small" type="button">確定してインポート</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="table table-small" id="conflictTable">
+            <thead>
+              <tr>
+                <th>日付</th>
+                <th>既存</th>
+                <th>新規</th>
+                <th>選択</th>
+              </tr>
+            </thead>
+            <tbody id="conflictTbody"></tbody>
+          </table>
+        </div>
+
+        <div class="muted small">
+          「差分確認」は、既存と新規の値を見比べて決めたい行に使います（この画面で確認可能）。
+        </div>
+      </div>
+    </dialog>
+  </main>
+
+  <footer class="footer">
+    <div class="muted small">© BodyLog / 端末内保存・オフライン対応</div>
+  </footer>
+</body>
+</html>
