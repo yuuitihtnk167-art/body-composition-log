@@ -189,17 +189,23 @@
       <p class="small">行をタップすると編集できます。</p>
     </section>
 
-    <section class="card">
-      <h2>グラフ</h2>
-      <div class="toolbar">
-        <label class="chk"><input type="checkbox" id="cW" checked>体重</label>
-        <label class="chk"><input type="checkbox" id="cF" checked>体脂肪率</label>
-        <label class="chk"><input type="checkbox" id="cM" checked>筋肉量</label>
-        <label class="chk"><input type="checkbox" id="cMA">7日移動平均</label>
-      </div>
-      <canvas id="chart" height="220"></canvas>
-      <p class="small">Chart.js（CDN）を使用します。</p>
-    </section>
+   <section class="card">
+  <h2>グラフ</h2>
+  <div class="toolbar">
+    <label class="chk"><input type="checkbox" id="cW" checked>体重</label>
+    <label class="chk"><input type="checkbox" id="cF" checked>体脂肪率</label>
+    <label class="chk"><input type="checkbox" id="cM" checked>筋肉量</label>
+    <label class="chk"><input type="checkbox" id="cMA">7日移動平均</label>
+  </div>
+
+  <!-- ★ ここが重要 -->
+  <div class="chartWrap">
+    <canvas id="chart"></canvas>
+  </div>
+
+  <p class="small">Chart.js（CDN）を使用します。</p>
+</section>
+
 
     <section class="card">
       <h2>ヘルプ</h2>
@@ -215,3 +221,4 @@
   <script src="/app.js"></script>
 </body>
 </html>
+
