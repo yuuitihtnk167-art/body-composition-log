@@ -100,3 +100,14 @@ tbody tr:hover{background:rgba(255,255,255,.04)}
   display:flex; gap:10px; align-items:center;
 }
 .choice label{color:var(--text)}
+
+/* ===== Chart area: prevent oversized canvas ===== */
+.chartWrap{
+  height: 260px;          /* 好みで 220〜320 で調整OK */
+}
+
+#chart{
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
