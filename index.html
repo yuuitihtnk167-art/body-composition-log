@@ -6,7 +6,6 @@
   <meta name="theme-color" content="#0f766e" />
   <title>BodyLog（体組成ログ）</title>
 
-  <!-- 重要：Vercelはルート配信想定。全部 / で始める -->
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="apple-touch-icon" href="/icons/icon-192.png" />
   <link rel="stylesheet" href="/styles.css" />
@@ -17,7 +16,7 @@
       <div class="logo">B</div>
       <div>
         <div class="title">BodyLog</div>
-        <div class="subtitle">体組成ログ（端末内保存・オフライン）</div>
+        <div class="subtitle">体組成ログ（端末内保存・オフライン対応）</div>
       </div>
     </div>
     <button id="installBtn" class="btn ghost" hidden>インストール</button>
@@ -50,9 +49,9 @@
         <div class="row">
           <label>体重 (kg)</label>
           <div class="withStepper">
-            <button type="button" class="step" data-step="weight" data-delta="-0.1">−</button>
+            <button type="button" class="step" data-id="fWeight" data-delta="-0.1">−</button>
             <input inputmode="decimal" id="fWeight" placeholder="例: 55.0" />
-            <button type="button" class="step" data-step="weight" data-delta="0.1">＋</button>
+            <button type="button" class="step" data-id="fWeight" data-delta="0.1">＋</button>
           </div>
           <div id="hintWeight" class="hint"></div>
         </div>
@@ -66,9 +65,9 @@
         <div class="row">
           <label>体脂肪率 (%)</label>
           <div class="withStepper">
-            <button type="button" class="step" data-step="fat" data-delta="-0.1">−</button>
+            <button type="button" class="step" data-id="fFat" data-delta="-0.1">−</button>
             <input inputmode="decimal" id="fFat" placeholder="例: 16.5" />
-            <button type="button" class="step" data-step="fat" data-delta="0.1">＋</button>
+            <button type="button" class="step" data-id="fFat" data-delta="0.1">＋</button>
           </div>
           <div id="hintFat" class="hint"></div>
         </div>
@@ -76,9 +75,9 @@
         <div class="row">
           <label>筋肉量 (kg)</label>
           <div class="withStepper">
-            <button type="button" class="step" data-step="muscle" data-delta="-0.1">−</button>
+            <button type="button" class="step" data-id="fMuscle" data-delta="-0.1">−</button>
             <input inputmode="decimal" id="fMuscle" placeholder="例: 43.5" />
-            <button type="button" class="step" data-step="muscle" data-delta="0.1">＋</button>
+            <button type="button" class="step" data-id="fMuscle" data-delta="0.1">＋</button>
           </div>
           <div id="hintMuscle" class="hint"></div>
         </div>
@@ -111,7 +110,7 @@
           <button class="btn danger" type="button" id="deleteBtn" disabled>削除</button>
           <button class="btn ghost" type="button" id="resetBtn">リセット</button>
         </div>
-        <p class="small">※医療判断はしません。記録と可視化のみ。</p>
+        <p class="small">※医療判断はしません。記録と可視化のみです。</p>
       </form>
     </section>
 
@@ -122,17 +121,42 @@
         <div class="importActions">
           <button class="btn" id="importBtn" type="button">CSVインポート</button>
           <button class="btn ghost" id="exportCsvBtn" type="button">CSVエクスポート</button>
-          <button class="btn ghost" id="exportJsonBtn" type="button">JSONバックアップ</button>
-          <input type="file" id="jsonFile" accept="application/json" hidden />
-          <button class="btn ghost" id="importJsonBtn" type="button">JSON復元</button>
         </div>
         <details class="noteBox">
           <summary>CSV形式（対応ヘッダ）</summary>
           <pre>日付,体重,BMI,体脂肪率,筋肉量,内臓脂肪,基礎代謝量,体内年齢</pre>
           <p class="small">日付は YYYY/MM/DD と YYYY-MM-DD を受け付け、内部は YYYY-MM-DD に正規化します。</p>
+          <p class="small">Shift-JISのCSVは文字化けすることがあります。可能ならUTF-8で書き出してください。</p>
         </details>
       </div>
       <div id="importResult" class="note"></div>
+
+      <!-- 衝突解決UI（confirm連発しない） -->
+      <div id="conflictBox" class="conflictBox hidden">
+        <h3>日付が重複しました（衝突解決）</h3>
+        <div class="conflictActions">
+          <button class="btn" id="applyOverwriteAll" type="button">衝突分を全部上書き</button>
+          <button class="btn ghost" id="applySkipAll" type="button">衝突分を全部スキップ</button>
+        </div>
+        <p class="small">または、日付ごとに「上書き/スキップ」を選んで「選択を適用」できます。</p>
+        <div class="tableWrap">
+          <table id="conflictTbl">
+            <thead>
+              <tr>
+                <th>日付</th>
+                <th>既存 体重</th>
+                <th>新規 体重</th>
+                <th>選択</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="conflictActions">
+          <button class="btn" id="applySelected" type="button">選択を適用</button>
+          <button class="btn ghost" id="cancelImport" type="button">キャンセル</button>
+        </div>
+      </div>
     </section>
 
     <section class="card">
@@ -174,15 +198,15 @@
         <label class="chk"><input type="checkbox" id="cMA">7日移動平均</label>
       </div>
       <canvas id="chart" height="220"></canvas>
-      <p class="small">Chart.js（CDN）を使います。オフライン時は既に読み込み済みなら表示できます。</p>
+      <p class="small">Chart.js（CDN）を使用します。</p>
     </section>
 
     <section class="card">
       <h2>ヘルプ</h2>
       <ul class="small">
-        <li>データは端末内（IndexedDB）に保存し、外部送信しません。</li>
-        <li>iPhoneはSafariで開き、共有→「ホーム画面に追加」で入れます。</li>
-        <li>AndroidはChromeで開き、メニュー→「アプリをインストール」または「ホーム画面に追加」です。</li>
+        <li>データは端末内（IndexedDB）に保存し、外部へ送信しません。</li>
+        <li>iPhoneはSafariで開き、共有→「ホーム画面に追加」でインストールします。</li>
+        <li>更新が反映されない場合は、ホーム画面のアプリ削除→サイトデータ削除→入れ直しが確実です。</li>
       </ul>
     </section>
   </main>
