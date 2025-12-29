@@ -1,5 +1,4 @@
-// BodyLog v2 - clean rebuild (no JSON backup/restore)
-// FIX: latest-record-based range, dual y-axes, timezone-safe date handling
+// BodyLog v3 - chart fix (y-axis padding + correct x-range labels) + SW update friendly
 const DB_NAME = "bodylog-db";
 const DB_VER = 2;
 const STORE = "entries";
@@ -31,13 +30,11 @@ function toISODate(s){
 
   if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
 
-  // allow YYYY/MM/DD and YYYY/M/D
   if (/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(t)) {
     const [y,mm,dd] = t.split("/");
     return `${y}-${pad2(Number(mm))}-${pad2(Number(dd))}`;
   }
 
-  // fallback: Date parse (may be locale-dependent)
   const d = new Date(t);
   if (Number.isNaN(d.getTime())) return "";
   return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
@@ -75,15 +72,10 @@ async function txDo(mode, fn){
   });
 }
 
-async function dbPut(entry){
-  await txDo("readwrite", (s)=>s.put(entry));
-}
-async function dbPutMany(entries){
-  await txDo("readwrite", (s)=>{ for(const e of entries) s.put(e); });
-}
-async function dbDelete(date){
-  await txDo("readwrite", (s)=>s.delete(date));
-}
+async function dbPut(entry){ await txDo("readwrite", (s)=>s.put(entry)); }
+async function dbPutMany(entries){ await txDo("readwrite", (s)=>{ for(const e of entries) s.put(e); }); }
+async function dbDelete(date){ await txDo("readwrite", (s)=>s.delete(date)); }
+
 async function dbGet(date){
   const db = await openDB();
   return new Promise((resolve,reject)=>{
@@ -93,6 +85,7 @@ async function dbGet(date){
     req.onerror = ()=>reject(req.error);
   });
 }
+
 async function dbGetAll(){
   const db = await openDB();
   return new Promise((resolve,reject)=>{
@@ -203,8 +196,6 @@ function renderDashboard(entries){
   }
 
   const latestISO = entries.reduce((p,c)=> (p > c.date ? p : c.date), entries[0].date);
-  const latestEntry = entries.find(e=>e.date === latestISO) || entries.reduce((p,c)=> p.date > c.date ? p : c);
-
   $("kpiDate").textContent = latestISO;
 
   const latestDate = dateFromISO(latestISO);
@@ -236,9 +227,6 @@ function renderDashboard(entries){
   }else{
     $("dashNote").textContent = "";
   }
-
-  // suppress unused var warning
-  void latestEntry;
 }
 
 function renderTable(entries, latestISO){
@@ -264,6 +252,33 @@ function renderTable(entries, latestISO){
   }
 }
 
+/**
+ * Compute padded min/max for chart axis so "small changes" don't look flat.
+ * If range is tiny, enforce minimum padding.
+ */
+function axisMinMax(values, {minPad=1, padRatio=0.15} = {}){
+  const nums = values.filter(v=>Number.isFinite(v));
+  if(!nums.length) return {min: undefined, max: undefined};
+
+  let mn = Math.min(...nums);
+  let mx = Math.max(...nums);
+
+  if(mn === mx){
+    const pad = Math.max(minPad, Math.abs(mn)*0.05, 0.5);
+    return {min: mn - pad, max: mx + pad};
+  }
+
+  const span = mx - mn;
+  const pad = Math.max(minPad, span * padRatio);
+  return {min: mn - pad, max: mx + pad};
+}
+
+function formatLabelMMDD(iso){
+  // iso: YYYY-MM-DD
+  if(!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  return `${iso.slice(5,7)}/${iso.slice(8,10)}`;
+}
+
 function renderChart(entries, latestISO){
   if(!window.Chart) return;
 
@@ -271,35 +286,45 @@ function renderChart(entries, latestISO){
     .filter(e=>withinRange(e.date, latestISO))
     .sort((a,b)=>a.date.localeCompare(b.date));
 
+  // X labels = filtered rows only (range selection exactly matches)
   const labels = rows.map(e=>e.date);
 
-  const ds = [];
   const showMA = $("cMA").checked;
+  const ds = [];
 
   function addSeries(label, key, yAxisID){
-    ds.push({
-      label,
-      data: rows.map(e=>Number.isFinite(e[key]) ? e[key] : null),
-      tension: 0.25,
-      spanGaps: true,
-      yAxisID
-    });
+    const data = rows.map(e=>Number.isFinite(e[key]) ? e[key] : null);
+    ds.push({ label, data, tension:0.25, spanGaps:true, yAxisID });
     if(showMA){
       ds.push({
         label: `${label} (7日平均)`,
         data: movingAvg(rows, key, 7),
-        tension: 0.25,
-        spanGaps: true,
+        tension:0.25,
+        spanGaps:true,
         yAxisID,
-        borderDash: [6,6]
+        borderDash:[6,6]
       });
     }
   }
 
   // kg: left axis / %: right axis
-  if($("cW").checked) addSeries("体重","weight","yKg");
-  if($("cM").checked) addSeries("筋肉量","muscle","yKg");
-  if($("cF").checked) addSeries("体脂肪率","fat","yPct");
+  const showW = $("cW").checked;
+  const showM = $("cM").checked;
+  const showF = $("cF").checked;
+
+  if(showW) addSeries("体重","weight","yKg");
+  if(showM) addSeries("筋肉量","muscle","yKg");
+  if(showF) addSeries("体脂肪率","fat","yPct");
+
+  // axis padding based on visible raw series only (not MA)
+  const kgVals = [];
+  if(showW) kgVals.push(...rows.map(r=>r.weight));
+  if(showM) kgVals.push(...rows.map(r=>r.muscle));
+  const pctVals = [];
+  if(showF) pctVals.push(...rows.map(r=>r.fat));
+
+  const kgMM = axisMinMax(kgVals, {minPad: 0.8, padRatio: 0.18});
+  const pctMM = axisMinMax(pctVals, {minPad: 1.2, padRatio: 0.22});
 
   const ctx = $("chart").getContext("2d");
   if(state.chart) state.chart.destroy();
@@ -312,22 +337,43 @@ function renderChart(entries, latestISO){
       maintainAspectRatio:false,
       resizeDelay: 100,
       interaction:{ mode:"index", intersect:false },
-      plugins:{ legend:{ labels:{ color:"#e6edf6" } } },
+      plugins:{
+        legend:{ labels:{ color:"#e6edf6" } },
+        tooltip:{
+          callbacks:{
+            title:(items)=> {
+              const iso = items?.[0]?.label ?? "";
+              return iso; // show full ISO on tooltip
+            }
+          }
+        }
+      },
       scales:{
-        x:{ ticks:{ color:"#a6b3c5", maxRotation:0, autoSkip:true }, grid:{ color:"rgba(255,255,255,.06)" } },
-
+        x:{
+          ticks:{
+            color:"#a6b3c5",
+            maxRotation:0,
+            autoSkip:true,
+            maxTicksLimit: 7,
+            callback:(val, idx)=> formatLabelMMDD(labels[idx])
+          },
+          grid:{ color:"rgba(255,255,255,.06)" }
+        },
         yKg:{
           position:"left",
           ticks:{ color:"#a6b3c5" },
           grid:{ color:"rgba(255,255,255,.06)" },
-          title:{ display:true, text:"kg", color:"#a6b3c5" }
+          title:{ display:true, text:"kg", color:"#a6b3c5" },
+          min: kgMM.min,
+          max: kgMM.max
         },
-
         yPct:{
           position:"right",
           ticks:{ color:"#a6b3c5" },
           grid:{ drawOnChartArea:false },
-          title:{ display:true, text:"%", color:"#a6b3c5" }
+          title:{ display:true, text:"%", color:"#a6b3c5" },
+          min: pctMM.min,
+          max: pctMM.max
         }
       }
     }
@@ -413,8 +459,8 @@ async function startImportCSV(file){
   const missing = expected.filter(h=>idx[h]===-1);
   if(missing.length){ resultEl.textContent = `ヘッダ不一致。不足: ${missing.join(" / ")}`; return; }
 
-  // CSV内の同一日付は「最後の行を採用」して、重複数を報告
-  const map = new Map(); // date -> {entry, count, firstLineNo, lastLineNo}
+  // CSV内の同一日付は「最後の行を採用」
+  const map = new Map();
   let errors = 0;
   const errLines = [];
 
@@ -440,7 +486,6 @@ async function startImportCSV(file){
   const duplicates = [...map.entries()].filter(([,v])=>v.count>1);
   const incoming = [...map.values()].map(v=>v.entry);
 
-  // 既存データと突き合わせ（ここでは保存しない）
   const existingAll = await dbGetAll();
   const existingByDate = new Map(existingAll.map(e=>[e.date, e]));
 
@@ -454,7 +499,6 @@ async function startImportCSV(file){
 
   state.pendingImport = { newOnes, conflicts, errors, errLines, duplicates };
 
-  // 新規だけなら一括保存で終わり
   if(conflicts.length === 0){
     await dbPutMany(newOnes);
     resultEl.textContent =
@@ -466,7 +510,6 @@ async function startImportCSV(file){
     return;
   }
 
-  // 衝突がある場合：衝突解決UIを出す（confirm連発しない）
   showConflicts();
   renderConflictTable(conflicts);
 
@@ -505,7 +548,6 @@ async function applyImport(mode){
   const pi = state.pendingImport;
   if(!pi){ hideConflicts(); return; }
 
-  // conflicts の action を決める
   if(mode === "overwriteAll"){
     pi.conflicts.forEach(c=>c.action="overwrite");
   }else if(mode === "skipAll"){
@@ -527,7 +569,6 @@ async function applyImport(mode){
 
   for(const c of pi.conflicts){
     if(c.action === "overwrite"){
-      // 既存のmemoなどは保持したいなら、ここで merge する
       const merged = { ...c.existing, ...c.incoming, updatedAt: Date.now() };
       toPut.push(merged);
       updated++;
@@ -632,7 +673,6 @@ function setupEvents(){
     setHints(await getPreviousEntry(date));
   });
 
-  // 衝突解決ボタン
   $("applyOverwriteAll").addEventListener("click", ()=>applyImport("overwriteAll"));
   $("applySkipAll").addEventListener("click", ()=>applyImport("skipAll"));
   $("applySelected").addEventListener("click", ()=>applyImport("selected"));
