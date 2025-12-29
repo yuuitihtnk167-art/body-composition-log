@@ -1,4 +1,5 @@
 // BodyLog v2 - clean rebuild (no JSON backup/restore)
+// FIX: latest-record-based range, dual y-axes, timezone-safe date handling
 const DB_NAME = "bodylog-db";
 const DB_VER = 2;
 const STORE = "entries";
@@ -6,26 +7,42 @@ const $ = (id) => document.getElementById(id);
 
 const state = {
   sortDesc: true,
-  rangeDays: 30,
+  rangeDays: 30, // 7/30/90 or "all"
   chart: null,
   pendingInstallPrompt: null,
-  pendingImport: null, // { newOnes:[], conflicts:[{date, existing, incoming, action}] }
+  pendingImport: null, // { newOnes:[], conflicts:[{date, existing, incoming, action}], errors, errLines, duplicates }
 };
 
 function pad2(n){ return String(n).padStart(2,"0"); }
 
+// Treat YYYY-MM-DD as local date (avoid TZ shift)
+function dateFromISO(dateISO){
+  if(!dateISO) return null;
+  const t = String(dateISO).trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(t)) return null;
+  const [y,m,d] = t.split("-").map(Number);
+  return new Date(y, m-1, d);
+}
+
+// Accept YYYY-MM-DD, YYYY/MM/DD. Keep internal YYYY-MM-DD.
 function toISODate(s){
   if(!s) return "";
   const t = String(s).trim();
+
   if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
-  if (/^\d{4}\/\d{2}\/\d{2}$/.test(t)) {
-    const [y,m,d] = t.split("/");
-    return `${y}-${m}-${d}`;
+
+  // allow YYYY/MM/DD and YYYY/M/D
+  if (/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(t)) {
+    const [y,mm,dd] = t.split("/");
+    return `${y}-${pad2(Number(mm))}-${pad2(Number(dd))}`;
   }
+
+  // fallback: Date parse (may be locale-dependent)
   const d = new Date(t);
   if (Number.isNaN(d.getTime())) return "";
   return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
 }
+
 function numOrNull(v){
   const t = String(v ?? "").trim();
   if(!t) return null;
@@ -46,6 +63,7 @@ function openDB(){
     req.onerror = ()=>reject(req.error);
   });
 }
+
 async function txDo(mode, fn){
   const db = await openDB();
   return new Promise((resolve,reject)=>{
@@ -56,6 +74,7 @@ async function txDo(mode, fn){
     tx.onerror = ()=>reject(tx.error);
   });
 }
+
 async function dbPut(entry){
   await txDo("readwrite", (s)=>s.put(entry));
 }
@@ -88,11 +107,13 @@ function setTodayDefault(){
   const d = new Date();
   $("fDate").value = `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
 }
+
 async function getPreviousEntry(date){
   const all = await dbGetAll();
   const older = all.filter(e=>e.date < date).sort((a,b)=>b.date.localeCompare(a.date));
   return older[0] || null;
 }
+
 function setHints(prev){
   const map = [
     ["hintWeight", prev?.weight, "kg"], ["hintBmi", prev?.bmi, ""], ["hintFat", prev?.fat, "%"],
@@ -103,6 +124,7 @@ function setHints(prev){
     $(id).textContent = (val===null||val===undefined) ? "" : `前回: ${val}${unit}`;
   }
 }
+
 function fillForm(e){
   $("fWeight").value = e?.weight ?? "";
   $("fBmi").value = e?.bmi ?? "";
@@ -114,12 +136,14 @@ function fillForm(e){
   $("fMemo").value = e?.memo ?? "";
   $("deleteBtn").disabled = !e?.date;
 }
+
 function clearFormKeepDate(){
   const d = $("fDate").value;
   fillForm(null);
   $("fDate").value = d;
   $("deleteBtn").disabled = true;
 }
+
 function getFormEntry(){
   const date = toISODate($("fDate").value);
   return {
@@ -136,22 +160,30 @@ function getFormEntry(){
   };
 }
 
-function withinRange(dateISO){
+// Range filter: based on latest record date (not "today")
+function withinRange(dateISO, latestISO){
   if(state.rangeDays === "all") return true;
+  if(!latestISO) return true;
+
   const days = Number(state.rangeDays);
-  const d = new Date(dateISO+"T00:00:00");
-  const now = new Date();
-  const diff = (now - d) / (1000*60*60*24);
+  const d = dateFromISO(dateISO);
+  const latest = dateFromISO(latestISO);
+  if(!d || !latest) return true;
+
+  const diff = (latest - d) / (1000*60*60*24);
   return diff >= 0 && diff <= days;
 }
+
 function sortEntries(arr){
   return arr.sort((a,b)=> state.sortDesc ? (b.date.localeCompare(a.date)) : (a.date.localeCompare(b.date)));
 }
+
 function calcAvg(arr, key){
   const vals = arr.map(x=>x[key]).filter(v=>Number.isFinite(v));
   if(!vals.length) return null;
   return vals.reduce((p,c)=>p+c,0)/vals.length;
 }
+
 function movingAvg(points, key, window=7){
   const out = [];
   for(let i=0;i<points.length;i++){
@@ -169,23 +201,30 @@ function renderDashboard(entries){
     $("dashNote").textContent = "まだデータがありません。CSVインポートか今日の入力から始めてください。";
     return;
   }
-  const latest = entries.reduce((p,c)=> p.date > c.date ? p : c);
-  $("kpiDate").textContent = latest.date;
 
-  const latestDate = new Date(latest.date+"T00:00:00");
+  const latestISO = entries.reduce((p,c)=> (p > c.date ? p : c.date), entries[0].date);
+  const latestEntry = entries.find(e=>e.date === latestISO) || entries.reduce((p,c)=> p.date > c.date ? p : c);
+
+  $("kpiDate").textContent = latestISO;
+
+  const latestDate = dateFromISO(latestISO);
   const last7 = entries.filter(e=>{
-    const d = new Date(e.date+"T00:00:00");
+    const d = dateFromISO(e.date);
+    if(!d || !latestDate) return false;
     const diff = (latestDate - d)/(1000*60*60*24);
     return diff>=0 && diff<=6;
   });
+
   const w7 = calcAvg(last7,"weight");
   $("kpiW7").textContent = (w7===null) ? "-" : `${w7.toFixed(1)} kg`;
 
   const prev7 = entries.filter(e=>{
-    const d = new Date(e.date+"T00:00:00");
+    const d = dateFromISO(e.date);
+    if(!d || !latestDate) return false;
     const diff = (latestDate - d)/(1000*60*60*24);
     return diff>=7 && diff<=13;
   });
+
   const wPrev = calcAvg(prev7,"weight");
 
   if(w7!==null && wPrev!==null){
@@ -197,13 +236,17 @@ function renderDashboard(entries){
   }else{
     $("dashNote").textContent = "";
   }
+
+  // suppress unused var warning
+  void latestEntry;
 }
 
-function renderTable(entries){
+function renderTable(entries, latestISO){
   const tbody = $("tbl").querySelector("tbody");
   tbody.innerHTML = "";
-  const rows = entries.filter(e=>withinRange(e.date));
+  const rows = entries.filter(e=>withinRange(e.date, latestISO));
   sortEntries(rows);
+
   for(const e of rows){
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -221,33 +264,71 @@ function renderTable(entries){
   }
 }
 
-function renderChart(entries){
+function renderChart(entries, latestISO){
   if(!window.Chart) return;
-  const rows = entries.filter(e=>withinRange(e.date)).sort((a,b)=>a.date.localeCompare(b.date));
+
+  const rows = entries
+    .filter(e=>withinRange(e.date, latestISO))
+    .sort((a,b)=>a.date.localeCompare(b.date));
+
   const labels = rows.map(e=>e.date);
 
   const ds = [];
   const showMA = $("cMA").checked;
-  function addSeries(label, key){
-    ds.push({ label, data: rows.map(e=>Number.isFinite(e[key]) ? e[key] : null), tension:.25, spanGaps:true });
-    if(showMA) ds.push({ label: `${label} (7日平均)`, data: movingAvg(rows,key,7), tension:.25, spanGaps:true, borderDash:[6,6] });
+
+  function addSeries(label, key, yAxisID){
+    ds.push({
+      label,
+      data: rows.map(e=>Number.isFinite(e[key]) ? e[key] : null),
+      tension: 0.25,
+      spanGaps: true,
+      yAxisID
+    });
+    if(showMA){
+      ds.push({
+        label: `${label} (7日平均)`,
+        data: movingAvg(rows, key, 7),
+        tension: 0.25,
+        spanGaps: true,
+        yAxisID,
+        borderDash: [6,6]
+      });
+    }
   }
-  if($("cW").checked) addSeries("体重","weight");
-  if($("cF").checked) addSeries("体脂肪率","fat");
-  if($("cM").checked) addSeries("筋肉量","muscle");
+
+  // kg: left axis / %: right axis
+  if($("cW").checked) addSeries("体重","weight","yKg");
+  if($("cM").checked) addSeries("筋肉量","muscle","yKg");
+  if($("cF").checked) addSeries("体脂肪率","fat","yPct");
 
   const ctx = $("chart").getContext("2d");
   if(state.chart) state.chart.destroy();
+
   state.chart = new Chart(ctx, {
     type:"line",
     data:{ labels, datasets: ds },
     options:{
-      responsive:true, maintainAspectRatio:false,
+      responsive:true,
+      maintainAspectRatio:false,
+      resizeDelay: 100,
       interaction:{ mode:"index", intersect:false },
       plugins:{ legend:{ labels:{ color:"#e6edf6" } } },
       scales:{
-        x:{ ticks:{ color:"#a6b3c5" }, grid:{ color:"rgba(255,255,255,.06)" } },
-        y:{ ticks:{ color:"#a6b3c5" }, grid:{ color:"rgba(255,255,255,.06)" } },
+        x:{ ticks:{ color:"#a6b3c5", maxRotation:0, autoSkip:true }, grid:{ color:"rgba(255,255,255,.06)" } },
+
+        yKg:{
+          position:"left",
+          ticks:{ color:"#a6b3c5" },
+          grid:{ color:"rgba(255,255,255,.06)" },
+          title:{ display:true, text:"kg", color:"#a6b3c5" }
+        },
+
+        yPct:{
+          position:"right",
+          ticks:{ color:"#a6b3c5" },
+          grid:{ drawOnChartArea:false },
+          title:{ display:true, text:"%", color:"#a6b3c5" }
+        }
       }
     }
   });
@@ -255,9 +336,11 @@ function renderChart(entries){
 
 async function refreshUI(){
   const all = await dbGetAll();
+  const latestISO = all.length ? all.reduce((p,c)=> (p > c.date ? p : c.date), all[0].date) : null;
+
   renderDashboard(all);
-  renderTable(all);
-  renderChart(all);
+  renderTable(all, latestISO);
+  renderChart(all, latestISO);
   setHints(await getPreviousEntry(toISODate($("fDate").value)));
 }
 
@@ -280,6 +363,7 @@ function parseCSV(text){
   };
   return { header: parseLine(lines[0]), rows: lines.slice(1).map(parseLine) };
 }
+
 function download(filename, text, mime="text/plain"){
   const blob = new Blob([text], {type:mime});
   const url = URL.createObjectURL(blob);
