@@ -1,17 +1,28 @@
+// BodyLog v2 - clean rebuild (no JSON backup/restore)
 const DB_NAME = "bodylog-db";
-const DB_VER = 1;
+const DB_VER = 2;
 const STORE = "entries";
 const $ = (id) => document.getElementById(id);
 
-const state = { sortDesc: true, rangeDays: 30, chart: null, pendingInstallPrompt: null };
+const state = {
+  sortDesc: true,
+  rangeDays: 30,
+  chart: null,
+  pendingInstallPrompt: null,
+  pendingImport: null, // { newOnes:[], conflicts:[{date, existing, incoming, action}] }
+};
 
 function pad2(n){ return String(n).padStart(2,"0"); }
 
 function toISODate(s){
   if(!s) return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  if (/^\d{4}\/\d{2}\/\d{2}$/.test(s)) { const [y,m,d]=s.split("/"); return `${y}-${m}-${d}`; }
-  const d = new Date(s);
+  const t = String(s).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  if (/^\d{4}\/\d{2}\/\d{2}$/.test(t)) {
+    const [y,m,d] = t.split("/");
+    return `${y}-${m}-${d}`;
+  }
+  const d = new Date(t);
   if (Number.isNaN(d.getTime())) return "";
   return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
 }
@@ -27,29 +38,32 @@ function openDB(){
     const req = indexedDB.open(DB_NAME, DB_VER);
     req.onupgradeneeded = () => {
       const db = req.result;
-      if(!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: "date" });
+      if(!db.objectStoreNames.contains(STORE)){
+        db.createObjectStore(STORE, { keyPath: "date" });
+      }
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = ()=>resolve(req.result);
+    req.onerror = ()=>reject(req.error);
+  });
+}
+async function txDo(mode, fn){
+  const db = await openDB();
+  return new Promise((resolve,reject)=>{
+    const tx = db.transaction(STORE, mode);
+    const store = tx.objectStore(STORE);
+    fn(store);
+    tx.oncomplete = ()=>resolve();
+    tx.onerror = ()=>reject(tx.error);
   });
 }
 async function dbPut(entry){
-  const db = await openDB();
-  return new Promise((resolve,reject)=>{
-    const tx = db.transaction(STORE,"readwrite");
-    tx.objectStore(STORE).put(entry);
-    tx.oncomplete = ()=>resolve();
-    tx.onerror = ()=>reject(tx.error);
-  });
+  await txDo("readwrite", (s)=>s.put(entry));
+}
+async function dbPutMany(entries){
+  await txDo("readwrite", (s)=>{ for(const e of entries) s.put(e); });
 }
 async function dbDelete(date){
-  const db = await openDB();
-  return new Promise((resolve,reject)=>{
-    const tx = db.transaction(STORE,"readwrite");
-    tx.objectStore(STORE).delete(date);
-    tx.oncomplete = ()=>resolve();
-    tx.onerror = ()=>reject(tx.error);
-  });
+  await txDo("readwrite", (s)=>s.delete(date));
 }
 async function dbGet(date){
   const db = await openDB();
@@ -247,9 +261,11 @@ async function refreshUI(){
   setHints(await getPreviousEntry(toISODate($("fDate").value)));
 }
 
+// --- CSV ---
 function parseCSV(text){
   const lines = text.replace(/\r\n/g,"\n").replace(/\r/g,"\n").split("\n").filter(l=>l.trim().length);
   if(!lines.length) return { header:[], rows:[] };
+
   const parseLine = (line)=>{
     const out=[]; let cur=""; let inQ=false;
     for(let i=0;i<line.length;i++){
@@ -273,51 +289,6 @@ function download(filename, text, mime="text/plain"){
   URL.revokeObjectURL(url);
 }
 
-async function doImportCSV(file){
-  const resultEl = $("importResult");
-  resultEl.textContent = "";
-  if(!file){ resultEl.textContent="CSVファイルを選択してください。"; return; }
-
-  const {header, rows} = parseCSV(await file.text());
-  const expected = ["日付","体重","BMI","体脂肪率","筋肉量","内臓脂肪","基礎代謝量","体内年齢"];
-  const idx = {}; expected.forEach(h=>idx[h]=header.indexOf(h));
-  const missing = expected.filter(h=>idx[h]===-1);
-  if(missing.length){ resultEl.textContent = `ヘッダ不一致。不足: ${missing.join(" / ")}`; return; }
-
-  let added=0, updated=0, skipped=0, errors=0;
-  const errLines=[];
-  for(let i=0;i<rows.length;i++){
-    try{
-      const r = rows[i];
-      const date = toISODate(r[idx["日付"]]);
-      if(!date) throw new Error("日付形式が不正");
-      const entry = {
-        date,
-        weight:numOrNull(r[idx["体重"]]),
-        bmi:numOrNull(r[idx["BMI"]]),
-        fat:numOrNull(r[idx["体脂肪率"]]),
-        muscle:numOrNull(r[idx["筋肉量"]]),
-        visceral:numOrNull(r[idx["内臓脂肪"]]),
-        bmr:numOrNull(r[idx["基礎代謝量"]]),
-        age:numOrNull(r[idx["体内年齢"]]),
-        memo:"",
-        updatedAt:Date.now()
-      };
-      const existing = await dbGet(date);
-      if(existing){
-        const ok = confirm(`日付 ${date} は既にあります。上書きしますか？\nOK=上書き / キャンセル=スキップ`);
-        if(ok){ await dbPut({...existing, ...entry}); updated++; }
-        else skipped++;
-      }else{ await dbPut(entry); added++; }
-    }catch(e){
-      errors++; errLines.push(`行${i+2}: ${e.message}`);
-    }
-  }
-  resultEl.textContent =
-    `インポート結果: 追加 ${added} / 更新 ${updated} / スキップ ${skipped} / エラー ${errors}` +
-    (errLines.length ? `\n${errLines.slice(0,20).join("\n")}` : "");
-  await refreshUI();
-}
 async function exportCSV(){
   const all = await dbGetAll();
   const header = ["日付","体重","BMI","体脂肪率","筋肉量","内臓脂肪","基礎代謝量","体内年齢"];
@@ -328,32 +299,178 @@ async function exportCSV(){
   }
   download("bodylog_export.csv", lines.join("\n"), "text/csv");
 }
-async function exportJSON(){
-  const all = await dbGetAll();
-  download("bodylog_backup.json", JSON.stringify({version:1, exportedAt:new Date().toISOString(), entries:all}, null, 2), "application/json");
+
+function makeEntryFromRow(date, r, idx){
+  return {
+    date,
+    weight: numOrNull(r[idx["体重"]]),
+    bmi: numOrNull(r[idx["BMI"]]),
+    fat: numOrNull(r[idx["体脂肪率"]]),
+    muscle: numOrNull(r[idx["筋肉量"]]),
+    visceral: numOrNull(r[idx["内臓脂肪"]]),
+    bmr: numOrNull(r[idx["基礎代謝量"]]),
+    age: numOrNull(r[idx["体内年齢"]]),
+    memo: "",
+    updatedAt: Date.now(),
+  };
 }
-async function importJSON(file){
+
+async function startImportCSV(file){
   const resultEl = $("importResult");
   resultEl.textContent = "";
-  if(!file){ resultEl.textContent="JSONファイルを選択してください。"; return; }
-  try{
-    const obj = JSON.parse(await file.text());
-    if(!obj || !Array.isArray(obj.entries)) throw new Error("形式が不正");
-    let count=0;
-    for(const e of obj.entries){
-      if(e?.date && /^\d{4}-\d{2}-\d{2}$/.test(e.date)){ await dbPut({...e, updatedAt:Date.now()}); count++; }
+  hideConflicts();
+
+  if(!file){ resultEl.textContent="CSVファイルを選択してください。"; return; }
+
+  const {header, rows} = parseCSV(await file.text());
+  const expected = ["日付","体重","BMI","体脂肪率","筋肉量","内臓脂肪","基礎代謝量","体内年齢"];
+  const idx = {};
+  expected.forEach(h=>idx[h]=header.indexOf(h));
+  const missing = expected.filter(h=>idx[h]===-1);
+  if(missing.length){ resultEl.textContent = `ヘッダ不一致。不足: ${missing.join(" / ")}`; return; }
+
+  // CSV内の同一日付は「最後の行を採用」して、重複数を報告
+  const map = new Map(); // date -> {entry, count, firstLineNo, lastLineNo}
+  let errors = 0;
+  const errLines = [];
+
+  for(let i=0;i<rows.length;i++){
+    const lineNo = i + 2;
+    try{
+      const r = rows[i];
+      const date = toISODate(r[idx["日付"]]);
+      if(!date) throw new Error("日付形式が不正");
+      const entry = makeEntryFromRow(date, r, idx);
+      const prev = map.get(date);
+      if(prev){
+        map.set(date, { entry, count: prev.count + 1, firstLineNo: prev.firstLineNo, lastLineNo: lineNo });
+      }else{
+        map.set(date, { entry, count: 1, firstLineNo: lineNo, lastLineNo: lineNo });
+      }
+    }catch(e){
+      errors++;
+      errLines.push(`行${lineNo}: ${e.message}`);
     }
-    resultEl.textContent = `JSON復元: ${count}件取り込みました。`;
+  }
+
+  const duplicates = [...map.entries()].filter(([,v])=>v.count>1);
+  const incoming = [...map.values()].map(v=>v.entry);
+
+  // 既存データと突き合わせ（ここでは保存しない）
+  const existingAll = await dbGetAll();
+  const existingByDate = new Map(existingAll.map(e=>[e.date, e]));
+
+  const newOnes = [];
+  const conflicts = [];
+  for(const e of incoming){
+    const ex = existingByDate.get(e.date);
+    if(ex) conflicts.push({ date: e.date, existing: ex, incoming: e, action: "overwrite" });
+    else newOnes.push(e);
+  }
+
+  state.pendingImport = { newOnes, conflicts, errors, errLines, duplicates };
+
+  // 新規だけなら一括保存で終わり
+  if(conflicts.length === 0){
+    await dbPutMany(newOnes);
+    resultEl.textContent =
+      `インポート結果: 追加 ${newOnes.length} / 更新 0 / スキップ 0 / エラー ${errors}` +
+      (duplicates.length ? `\nCSV内の同一日付重複: ${duplicates.length}日（最後の行を採用）` : "") +
+      (errLines.length ? `\n${errLines.slice(0,20).join("\n")}` : "");
     await refreshUI();
-  }catch(err){
-    resultEl.textContent = `JSON復元に失敗: ${err.message}`;
+    state.pendingImport = null;
+    return;
+  }
+
+  // 衝突がある場合：衝突解決UIを出す（confirm連発しない）
+  showConflicts();
+  renderConflictTable(conflicts);
+
+  resultEl.textContent =
+    `衝突 ${conflicts.length} 件があります。上の「衝突解決」で処理してください。` +
+    `\n（新規 ${newOnes.length} 件、エラー ${errors} 件）` +
+    (duplicates.length ? `\nCSV内の同一日付重複: ${duplicates.length}日（最後の行を採用）` : "") +
+    (errLines.length ? `\n${errLines.slice(0,10).join("\n")}` : "");
+}
+
+function showConflicts(){ $("conflictBox").classList.remove("hidden"); }
+function hideConflicts(){ $("conflictBox").classList.add("hidden"); $("conflictTbl").querySelector("tbody").innerHTML=""; }
+
+function renderConflictTable(conflicts){
+  const tbody = $("conflictTbl").querySelector("tbody");
+  tbody.innerHTML = "";
+  for(const c of conflicts){
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${c.date}</td>
+      <td>${c.existing.weight ?? ""}</td>
+      <td>${c.incoming.weight ?? ""}</td>
+      <td>
+        <div class="choice">
+          <label><input type="radio" name="act-${c.date}" value="overwrite" checked>上書き</label>
+          <label><input type="radio" name="act-${c.date}" value="skip">スキップ</label>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
   }
 }
 
+async function applyImport(mode){
+  const resultEl = $("importResult");
+  const pi = state.pendingImport;
+  if(!pi){ hideConflicts(); return; }
+
+  // conflicts の action を決める
+  if(mode === "overwriteAll"){
+    pi.conflicts.forEach(c=>c.action="overwrite");
+  }else if(mode === "skipAll"){
+    pi.conflicts.forEach(c=>c.action="skip");
+  }else if(mode === "selected"){
+    for(const c of pi.conflicts){
+      const sel = document.querySelector(`input[name="act-${c.date}"]:checked`);
+      c.action = sel?.value === "skip" ? "skip" : "overwrite";
+    }
+  }else if(mode === "cancel"){
+    state.pendingImport = null;
+    hideConflicts();
+    resultEl.textContent = "インポートをキャンセルしました。";
+    return;
+  }
+
+  const toPut = [...pi.newOnes];
+  let updated = 0, skipped = 0;
+
+  for(const c of pi.conflicts){
+    if(c.action === "overwrite"){
+      // 既存のmemoなどは保持したいなら、ここで merge する
+      const merged = { ...c.existing, ...c.incoming, updatedAt: Date.now() };
+      toPut.push(merged);
+      updated++;
+    }else{
+      skipped++;
+    }
+  }
+
+  await dbPutMany(toPut);
+
+  hideConflicts();
+  resultEl.textContent =
+    `インポート結果: 追加 ${pi.newOnes.length} / 更新 ${updated} / スキップ ${skipped} / エラー ${pi.errors}` +
+    (pi.duplicates.length ? `\nCSV内の同一日付重複: ${pi.duplicates.length}日（最後の行を採用）` : "") +
+    (pi.errLines.length ? `\n${pi.errLines.slice(0,20).join("\n")}` : "");
+
+  state.pendingImport = null;
+  await refreshUI();
+}
+
+// --- install UI ---
 function setupInstallUI(){
   const btn = $("installBtn");
   window.addEventListener("beforeinstallprompt", (e)=>{
-    e.preventDefault(); state.pendingInstallPrompt = e; btn.hidden = false;
+    e.preventDefault();
+    state.pendingInstallPrompt = e;
+    btn.hidden = false;
   });
   btn.addEventListener("click", async ()=>{
     if(!state.pendingInstallPrompt) return;
@@ -364,6 +481,7 @@ function setupInstallUI(){
   });
 }
 
+// --- events ---
 function setupEvents(){
   $("entryForm").addEventListener("submit", async (e)=>{
     e.preventDefault();
@@ -375,6 +493,7 @@ function setupEvents(){
     setHints(await getPreviousEntry(entry.date));
     await refreshUI();
   });
+
   $("deleteBtn").addEventListener("click", async ()=>{
     const date = toISODate($("fDate").value);
     if(!date) return;
@@ -384,6 +503,7 @@ function setupEvents(){
     clearFormKeepDate();
     await refreshUI();
   });
+
   $("resetBtn").addEventListener("click", ()=> clearFormKeepDate());
 
   $("rangeSel").addEventListener("change", async ()=>{
@@ -391,6 +511,7 @@ function setupEvents(){
     state.rangeDays = (v==="all") ? "all" : Number(v);
     await refreshUI();
   });
+
   $("sortBtn").addEventListener("click", async ()=>{
     state.sortDesc = !state.sortDesc;
     $("sortBtn").textContent = `日付: ${state.sortDesc ? "降順" : "昇順"}`;
@@ -399,8 +520,7 @@ function setupEvents(){
 
   document.querySelectorAll(".step").forEach(el=>{
     el.addEventListener("click", ()=>{
-      const map = { weight:"fWeight", fat:"fFat", muscle:"fMuscle" };
-      const id = map[el.dataset.step];
+      const id = el.dataset.id;
       const delta = Number(el.dataset.delta);
       const cur = numOrNull($(id).value) ?? 0;
       const next = Math.round((cur + delta) * 10) / 10;
@@ -408,14 +528,8 @@ function setupEvents(){
     });
   });
 
-  $("importBtn").addEventListener("click", async ()=> doImportCSV($("csvFile").files?.[0]));
+  $("importBtn").addEventListener("click", async ()=> startImportCSV($("csvFile").files?.[0]));
   $("exportCsvBtn").addEventListener("click", exportCSV);
-  $("exportJsonBtn").addEventListener("click", exportJSON);
-  $("importJsonBtn").addEventListener("click", ()=> $("jsonFile").click());
-  $("jsonFile").addEventListener("change", async ()=>{
-    await importJSON($("jsonFile").files?.[0]);
-    $("jsonFile").value = "";
-  });
 
   ["cW","cF","cM","cMA"].forEach(id=>$(id).addEventListener("change", refreshUI));
 
@@ -433,6 +547,12 @@ function setupEvents(){
     }
     setHints(await getPreviousEntry(date));
   });
+
+  // 衝突解決ボタン
+  $("applyOverwriteAll").addEventListener("click", ()=>applyImport("overwriteAll"));
+  $("applySkipAll").addEventListener("click", ()=>applyImport("skipAll"));
+  $("applySelected").addEventListener("click", ()=>applyImport("selected"));
+  $("cancelImport").addEventListener("click", ()=>applyImport("cancel"));
 }
 
 async function init(){
@@ -440,8 +560,11 @@ async function init(){
 
   // SW（オフライン化）
   if("serviceWorker" in navigator){
-    try{ await navigator.serviceWorker.register("/service-worker.js", { scope: "/" }); }
-    catch(e){ console.warn("SW register failed", e); }
+    try{
+      await navigator.serviceWorker.register("/service-worker.js", { scope: "/" });
+    }catch(e){
+      console.warn("SW register failed", e);
+    }
   }
 
   setupInstallUI();
