@@ -1,6 +1,5 @@
-// BodyLog SW v2 (cache clean + app shell)
-const CACHE = "bodylog-shell-v2";
-const ASSETS = [
+const CACHE_NAME = "bodylog-shell-v3-20251229";
+const APP_SHELL = [
   "/",
   "/index.html",
   "/styles.css",
@@ -11,42 +10,36 @@ const ASSETS = [
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)));
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
+  );
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil((async ()=>{
-    const keys = await caches.keys();
-    await Promise.all(keys.map(k => (k !== CACHE) ? caches.delete(k) : Promise.resolve()));
-    await self.clients.claim();
-  })());
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.map(k => (k === CACHE_NAME ? null : caches.delete(k))))
+    )
+  );
+  self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-
-  // SPA的にどのURLでも index.html を返す（App Shell）
-  if (req.mode === "navigate") {
-    event.respondWith((async ()=>{
-      const cached = await caches.match("/index.html");
-      try {
-        const fresh = await fetch(req);
-        return fresh || cached;
-      } catch {
-        return cached;
-      }
-    })());
-    return;
-  }
-
-  event.respondWith((async ()=>{
-    const cached = await caches.match(req);
-    if (cached) return cached;
-    try {
-      return await fetch(req);
-    } catch {
-      return cached;
-    }
-  })());
+  event.respondWith(
+    caches.match(req).then((cached) => {
+      if (cached) return cached;
+      return fetch(req).then((res) => {
+        // 同一オリジンのGETだけキャッシュ（安全側）
+        const isGet = req.method === "GET";
+        const sameOrigin = new URL(req.url).origin === self.location.origin;
+        if (isGet && sameOrigin) {
+          const copy = res.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(req, copy));
+        }
+        return res;
+      }).catch(() => cached);
+    })
+  );
 });
