@@ -4,181 +4,198 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#0f766e" />
-  <title>BodyLog（体組成ログ）</title>
-
   <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/icons/icon-192.png" />
   <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <title>BodyLog（体組成ログ）</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <div class="logo">B</div>
+      <div class="logo">BL</div>
       <div>
         <div class="title">BodyLog</div>
-        <div class="subtitle">体組成ログ（端末内保存・オフライン対応）</div>
+        <div class="subtitle">体組成ログ（端末内保存・オフライン）</div>
       </div>
     </div>
     <button id="installBtn" class="btn ghost" hidden>インストール</button>
   </header>
 
+  <nav class="tabs" role="tablist" aria-label="BodyLog Tabs">
+    <button class="tab active" data-view="viewInput" role="tab" aria-selected="true">入力</button>
+    <button class="tab" data-view="viewImport" role="tab" aria-selected="false">インポート</button>
+    <button class="tab" data-view="viewList" role="tab" aria-selected="false">一覧</button>
+    <button class="tab" data-view="viewChart" role="tab" aria-selected="false">グラフ</button>
+  </nav>
+
   <main class="container">
-    <section class="card">
-      <h2>ダッシュボード</h2>
-      <div class="grid2">
-        <div class="kpi">
-          <div class="kpiLabel">最新日付</div>
-          <div id="kpiDate" class="kpiValue">-</div>
-        </div>
-        <div class="kpi">
-          <div class="kpiLabel">直近7日 平均体重</div>
-          <div id="kpiW7" class="kpiValue">-</div>
-        </div>
+    <section class="card kpi">
+      <div class="kpiItem">
+        <div class="kpiLabel">最新日付</div>
+        <div class="kpiValue" id="kpiDate">-</div>
       </div>
-      <p id="dashNote" class="note"></p>
+      <div class="kpiItem">
+        <div class="kpiLabel">直近7日 平均(体重)</div>
+        <div class="kpiValue" id="kpiW7">-</div>
+      </div>
+      <div class="kpiNote" id="dashNote">-</div>
     </section>
 
-    <section class="card">
+    <!-- 入力 -->
+    <section id="viewInput" class="view card">
       <h2>今日の入力</h2>
+
       <form id="entryForm" class="form">
-        <div class="row">
-          <label>日付</label>
-          <input type="date" id="fDate" required />
-        </div>
-
-        <div class="row">
-          <label>体重 (kg)</label>
-          <div class="withStepper">
-            <button type="button" class="step" data-id="fWeight" data-delta="-0.1">−</button>
-            <input inputmode="decimal" id="fWeight" placeholder="例: 55.0" />
-            <button type="button" class="step" data-id="fWeight" data-delta="0.1">＋</button>
+        <div class="row2">
+          <div class="field">
+            <label>日付</label>
+            <input id="fDate" type="date" required />
           </div>
-          <div id="hintWeight" class="hint"></div>
-        </div>
-
-        <div class="row">
-          <label>BMI</label>
-          <input inputmode="decimal" id="fBmi" placeholder="例: 19.8" />
-          <div id="hintBmi" class="hint"></div>
-        </div>
-
-        <div class="row">
-          <label>体脂肪率 (%)</label>
-          <div class="withStepper">
-            <button type="button" class="step" data-id="fFat" data-delta="-0.1">−</button>
-            <input inputmode="decimal" id="fFat" placeholder="例: 16.5" />
-            <button type="button" class="step" data-id="fFat" data-delta="0.1">＋</button>
+          <div class="field">
+            <label>メモ（任意）</label>
+            <input id="fMemo" type="text" placeholder="例）睡眠少なめ、歩数多め" />
           </div>
-          <div id="hintFat" class="hint"></div>
         </div>
 
-        <div class="row">
-          <label>筋肉量 (kg)</label>
-          <div class="withStepper">
-            <button type="button" class="step" data-id="fMuscle" data-delta="-0.1">−</button>
-            <input inputmode="decimal" id="fMuscle" placeholder="例: 43.5" />
-            <button type="button" class="step" data-id="fMuscle" data-delta="0.1">＋</button>
+        <div class="grid">
+          <div class="field">
+            <label>体重(kg) <span class="hint" id="hintWeight"></span></label>
+            <div class="numline">
+              <input id="fWeight" inputmode="decimal" placeholder="例) 55.0" />
+              <div class="steps">
+                <button type="button" class="step" data-id="fWeight" data-delta="-0.1">-0.1</button>
+                <button type="button" class="step" data-id="fWeight" data-delta="0.1">+0.1</button>
+              </div>
+            </div>
           </div>
-          <div id="hintMuscle" class="hint"></div>
-        </div>
 
-        <div class="row">
-          <label>内臓脂肪</label>
-          <input inputmode="decimal" id="fVisceral" placeholder="例: 8.5" />
-          <div id="hintVisceral" class="hint"></div>
-        </div>
+          <div class="field">
+            <label>BMI <span class="hint" id="hintBmi"></span></label>
+            <input id="fBmi" inputmode="decimal" placeholder="例) 19.8" />
+          </div>
 
-        <div class="row">
-          <label>基礎代謝量 (kcal)</label>
-          <input inputmode="numeric" id="fBmr" placeholder="例: 1230" />
-          <div id="hintBmr" class="hint"></div>
-        </div>
+          <div class="field">
+            <label>体脂肪率(%) <span class="hint" id="hintFat"></span></label>
+            <div class="numline">
+              <input id="fFat" inputmode="decimal" placeholder="例) 16.8" />
+              <div class="steps">
+                <button type="button" class="step" data-id="fFat" data-delta="-0.1">-0.1</button>
+                <button type="button" class="step" data-id="fFat" data-delta="0.1">+0.1</button>
+              </div>
+            </div>
+          </div>
 
-        <div class="row">
-          <label>体内年齢</label>
-          <input inputmode="numeric" id="fAge" placeholder="例: 44" />
-          <div id="hintAge" class="hint"></div>
-        </div>
+          <div class="field">
+            <label>筋肉量(kg) <span class="hint" id="hintMuscle"></span></label>
+            <div class="numline">
+              <input id="fMuscle" inputmode="decimal" placeholder="例) 43.4" />
+              <div class="steps">
+                <button type="button" class="step" data-id="fMuscle" data-delta="-0.1">-0.1</button>
+                <button type="button" class="step" data-id="fMuscle" data-delta="0.1">+0.1</button>
+              </div>
+            </div>
+          </div>
 
-        <div class="row">
-          <label>メモ（任意）</label>
-          <textarea id="fMemo" rows="2" placeholder="例: 運動/睡眠/食事など"></textarea>
+          <div class="field">
+            <label>内臓脂肪 <span class="hint" id="hintVisceral"></span></label>
+            <input id="fVisceral" inputmode="decimal" placeholder="例) 8.5" />
+          </div>
+
+          <div class="field">
+            <label>基礎代謝量(kcal) <span class="hint" id="hintBmr"></span></label>
+            <input id="fBmr" inputmode="numeric" placeholder="例) 1228" />
+          </div>
+
+          <div class="field">
+            <label>体内年齢 <span class="hint" id="hintAge"></span></label>
+            <input id="fAge" inputmode="numeric" placeholder="例) 44" />
+          </div>
         </div>
 
         <div class="actions">
           <button class="btn" type="submit">保存</button>
-          <button class="btn danger" type="button" id="deleteBtn" disabled>削除</button>
-          <button class="btn ghost" type="button" id="resetBtn">リセット</button>
+          <button id="resetBtn" class="btn ghost" type="button">入力クリア</button>
+          <button id="deleteBtn" class="btn danger" type="button" disabled>削除</button>
         </div>
-        <p class="small">※医療判断はしません。記録と可視化のみです。</p>
+        <div id="statusLine" class="status"></div>
       </form>
+
+      <div class="help small">
+        <div>・日付を変えると、その日の既存データがあれば自動で読み込み（編集）になるよ。</div>
+        <div>・データは端末内（IndexedDB）にだけ保存するよ。</div>
+      </div>
     </section>
 
-    <section class="card">
-      <h2>インポート / エクスポート</h2>
-      <div class="importBox">
-        <input type="file" id="csvFile" accept=".csv,text/csv" />
-        <div class="importActions">
-          <button class="btn" id="importBtn" type="button">CSVインポート</button>
-          <button class="btn ghost" id="exportCsvBtn" type="button">CSVエクスポート</button>
-        </div>
-        <details class="noteBox">
-          <summary>CSV形式（対応ヘッダ）</summary>
-          <pre>日付,体重,BMI,体脂肪率,筋肉量,内臓脂肪,基礎代謝量,体内年齢</pre>
-          <p class="small">日付は YYYY/MM/DD と YYYY-MM-DD を受け付け、内部は YYYY-MM-DD に正規化します。</p>
-          <p class="small">Shift-JISのCSVは文字化けすることがあります。可能ならUTF-8で書き出してください。</p>
-        </details>
-      </div>
-      <div id="importResult" class="note"></div>
+    <!-- インポート -->
+    <section id="viewImport" class="view card hidden">
+      <h2>CSVインポート</h2>
 
-      <!-- 衝突解決UI（confirm連発しない） -->
-      <div id="conflictBox" class="conflictBox hidden">
-        <h3>日付が重複しました（衝突解決）</h3>
-        <div class="conflictActions">
-          <button class="btn" id="applyOverwriteAll" type="button">衝突分を全部上書き</button>
-          <button class="btn ghost" id="applySkipAll" type="button">衝突分を全部スキップ</button>
+      <div class="importBox">
+        <input id="csvFile" type="file" accept=".csv,text/csv" />
+        <button id="importBtn" class="btn">インポート開始</button>
+        <button id="exportCsvBtn" class="btn ghost">CSVエクスポート</button>
+      </div>
+
+      <pre id="importResult" class="pre"></pre>
+
+      <div id="conflictBox" class="card sub hidden">
+        <h3>衝突解決（同じ日付が既にある）</h3>
+        <div class="actions">
+          <button id="applyOverwriteAll" class="btn">全部上書き</button>
+          <button id="applySkipAll" class="btn ghost">全部スキップ</button>
+          <button id="applySelected" class="btn">選択を適用</button>
+          <button id="cancelImport" class="btn danger ghost">キャンセル</button>
         </div>
-        <p class="small">または、日付ごとに「上書き/スキップ」を選んで「選択を適用」できます。</p>
+
         <div class="tableWrap">
           <table id="conflictTbl">
             <thead>
               <tr>
                 <th>日付</th>
-                <th>既存 体重</th>
-                <th>新規 体重</th>
-                <th>選択</th>
+                <th>既存(体重)</th>
+                <th>CSV(体重)</th>
+                <th>処理</th>
               </tr>
             </thead>
             <tbody></tbody>
           </table>
         </div>
-        <div class="conflictActions">
-          <button class="btn" id="applySelected" type="button">選択を適用</button>
-          <button class="btn ghost" id="cancelImport" type="button">キャンセル</button>
-        </div>
+      </div>
+
+      <div class="help small">
+        <div>対応ヘッダ：日付,体重,BMI,体脂肪率,筋肉量,内臓脂肪,基礎代謝量,体内年齢</div>
+        <div>日付形式：YYYY/MM/DD と YYYY-MM-DD に対応（内部はYYYY-MM-DD）</div>
       </div>
     </section>
 
-    <section class="card">
+    <!-- 一覧 -->
+    <section id="viewList" class="view card hidden">
       <h2>一覧</h2>
+
       <div class="toolbar">
-        <select id="rangeSel">
-          <option value="7">直近7日</option>
-          <option value="30" selected>直近30日</option>
-          <option value="90">直近90日</option>
-          <option value="all">全期間</option>
-        </select>
-        <button class="btn ghost" id="sortBtn" type="button">日付: 降順</button>
+        <button id="sortBtn" class="btn ghost">日付: 降順</button>
+
+        <label class="sel">
+          期間
+          <select id="rangeSel">
+            <option value="7">7日</option>
+            <option value="30" selected>30日</option>
+            <option value="90">90日</option>
+            <option value="all">全期間</option>
+          </select>
+        </label>
       </div>
+
       <div class="tableWrap">
         <table id="tbl">
           <thead>
             <tr>
               <th>日付</th>
               <th>体重</th>
-              <th>体脂肪率</th>
-              <th>筋肉量</th>
-              <th>内臓脂肪</th>
+              <th>体脂肪</th>
+              <th>筋肉</th>
+              <th>内臓</th>
               <th>基礎代謝</th>
               <th>体内年齢</th>
             </tr>
@@ -186,39 +203,41 @@
           <tbody></tbody>
         </table>
       </div>
-      <p class="small">行をタップすると編集できます。</p>
+
+      <div class="help small">・行をタップ（クリック）すると「入力」へ移動して編集できるよ。</div>
     </section>
 
-   <section class="card">
-  <h2>グラフ</h2>
-  <div class="toolbar">
-    <label class="chk"><input type="checkbox" id="cW" checked>体重</label>
-    <label class="chk"><input type="checkbox" id="cF" checked>体脂肪率</label>
-    <label class="chk"><input type="checkbox" id="cM" checked>筋肉量</label>
-    <label class="chk"><input type="checkbox" id="cMA">7日移動平均</label>
-  </div>
+    <!-- グラフ -->
+    <section id="viewChart" class="view card hidden">
+      <h2>グラフ</h2>
 
-  <!-- ★ ここが重要 -->
-  <div class="chartWrap">
-    <canvas id="chart"></canvas>
-  </div>
+      <div class="toolbar">
+        <label class="chk"><input type="checkbox" id="cW" checked>体重</label>
+        <label class="chk"><input type="checkbox" id="cF" checked>体脂肪率</label>
+        <label class="chk"><input type="checkbox" id="cM" checked>筋肉量</label>
+        <label class="chk"><input type="checkbox" id="cMA">7日移動平均</label>
 
-  <p class="small">Chart.js（CDN）を使用します。</p>
-</section>
+        <label class="sel">
+          期間
+          <select id="chartRangeSel">
+            <option value="7">7日</option>
+            <option value="30" selected>30日</option>
+            <option value="90">90日</option>
+            <option value="all">全期間</option>
+          </select>
+        </label>
+      </div>
 
+      <div class="chartWrap">
+        <canvas id="chart"></canvas>
+      </div>
 
-    <section class="card">
-      <h2>ヘルプ</h2>
-      <ul class="small">
-        <li>データは端末内（IndexedDB）に保存し、外部へ送信しません。</li>
-        <li>iPhoneはSafariで開き、共有→「ホーム画面に追加」でインストールします。</li>
-        <li>更新が反映されない場合は、ホーム画面のアプリ削除→サイトデータ削除→入れ直しが確実です。</li>
-      </ul>
+      <p class="small">・kg（体重/筋肉量）は左軸、%（体脂肪率）は右軸。値の範囲に合わせて自動で縦軸に余白を付けるよ。</p>
     </section>
   </main>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/app.js"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+  <script src="/app.js" defer></script>
 </body>
 </html>
-

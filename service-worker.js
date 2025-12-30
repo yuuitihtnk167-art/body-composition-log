@@ -1,5 +1,5 @@
-const CACHE_NAME = "bodylog-shell-v3-20251229";
-const APP_SHELL = [
+const CACHE = "bodylog-cache-v3";
+const ASSETS = [
   "/",
   "/index.html",
   "/styles.css",
@@ -11,35 +11,28 @@ const APP_SHELL = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
+    caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.map(k => (k === CACHE_NAME ? null : caches.delete(k))))
-    )
+      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   event.respondWith(
-    caches.match(req).then((cached) => {
-      if (cached) return cached;
-      return fetch(req).then((res) => {
-        // 同一オリジンのGETだけキャッシュ（安全側）
-        const isGet = req.method === "GET";
-        const sameOrigin = new URL(req.url).origin === self.location.origin;
-        if (isGet && sameOrigin) {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(req, copy));
-        }
-        return res;
-      }).catch(() => cached);
-    })
+    caches.match(req).then((cached) => cached || fetch(req).then((res) => {
+      // runtime cache (safe for same-origin)
+      if (req.method === "GET" && new URL(req.url).origin === location.origin) {
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put(req, copy));
+      }
+      return res;
+    }).catch(() => cached))
   );
 });
