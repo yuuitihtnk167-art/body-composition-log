@@ -1,4 +1,4 @@
-const CACHE_NAME = "bodylog-shell-v3-20260501-icons";
+const CACHE_NAME = "bodylog-shell-v3-20260501-input-ui";
 const APP_SHELL = [
   "./",
   "./index.html",
