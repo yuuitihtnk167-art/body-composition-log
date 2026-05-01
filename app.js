@@ -115,7 +115,6 @@ function fillForm(e){
   $("fVisceral").value = e?.visceral ?? "";
   $("fBmr").value = e?.bmr ?? "";
   $("fAge").value = e?.age ?? "";
-  $("fMemo").value = e?.memo ?? "";
   $("deleteBtn").disabled = !e?.date;
 }
 
@@ -161,7 +160,6 @@ function getFormEntry(){
     visceral: numOrNull($("fVisceral").value),
     bmr: numOrNull($("fBmr").value),
     age: numOrNull($("fAge").value),
-    memo: String($("fMemo").value || "").trim(),
     updatedAt: Date.now(),
   };
 }
