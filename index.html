@@ -7,7 +7,7 @@
   <title>BodyLog（体組成ログ）</title>
 
   <link rel="manifest" href="./manifest.webmanifest" />
-  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/icon-180.png" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
@@ -21,6 +21,13 @@
     </div>
     <button id="installBtn" class="btn ghost" hidden>インストール</button>
   </header>
+
+  <nav class="tabs" role="tablist" aria-label="BodyLog表示切替">
+    <button class="tab active" data-view="viewInput" role="tab" aria-selected="true">入力</button>
+    <button class="tab" data-view="viewImport" role="tab" aria-selected="false">インポート</button>
+    <button class="tab" data-view="viewList" role="tab" aria-selected="false">一覧</button>
+    <button class="tab" data-view="viewChart" role="tab" aria-selected="false">グラフ</button>
+  </nav>
 
   <main class="container">
     <section class="card">
@@ -38,7 +45,7 @@
       <p id="dashNote" class="note"></p>
     </section>
 
-    <section class="card">
+    <section id="viewInput" class="card view">
       <h2>今日の入力</h2>
       <form id="entryForm" class="form">
         <div class="row">
@@ -114,7 +121,7 @@
       </form>
     </section>
 
-    <section class="card">
+    <section id="viewImport" class="card view hidden">
       <h2>インポート / エクスポート</h2>
       <div class="importBox">
         <input type="file" id="csvFile" accept=".csv,text/csv" />
@@ -159,7 +166,7 @@
       </div>
     </section>
 
-    <section class="card">
+    <section id="viewList" class="card view hidden">
       <h2>一覧</h2>
       <div class="toolbar">
         <select id="rangeSel">
@@ -176,6 +183,7 @@
             <tr>
               <th>日付</th>
               <th>体重</th>
+              <th>BMI</th>
               <th>体脂肪率</th>
               <th>筋肉量</th>
               <th>内臓脂肪</th>
@@ -189,10 +197,11 @@
       <p class="small">行をタップすると編集できます。</p>
     </section>
 
-   <section class="card">
+   <section id="viewChart" class="card view hidden">
   <h2>グラフ</h2>
   <div class="toolbar">
     <label class="chk"><input type="checkbox" id="cW" checked>体重</label>
+    <label class="chk"><input type="checkbox" id="cB" checked>BMI</label>
     <label class="chk"><input type="checkbox" id="cF" checked>体脂肪率</label>
     <label class="chk"><input type="checkbox" id="cM" checked>筋肉量</label>
     <label class="chk"><input type="checkbox" id="cMA">7日移動平均</label>
