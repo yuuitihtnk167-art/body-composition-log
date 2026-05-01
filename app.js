@@ -107,17 +107,6 @@ async function getPreviousEntry(date){
   return older[0] || null;
 }
 
-function setHints(prev){
-  const map = [
-    ["hintWeight", prev?.weight, "kg"], ["hintBmi", prev?.bmi, ""], ["hintFat", prev?.fat, "%"],
-    ["hintMuscle", prev?.muscle, "kg"], ["hintVisceral", prev?.visceral, ""], ["hintBmr", prev?.bmr, "kcal"],
-    ["hintAge", prev?.age, ""],
-  ];
-  for(const [id,val,unit] of map){
-    $(id).textContent = (val===null||val===undefined) ? "" : `前回: ${val}${unit}`;
-  }
-}
-
 function fillForm(e){
   $("fWeight").value = e?.weight ?? "";
   $("fBmi").value = e?.bmi ?? "";
@@ -130,11 +119,35 @@ function fillForm(e){
   $("deleteBtn").disabled = !e?.date;
 }
 
+function fillPreviousNumbers(prev){
+  fillForm(null);
+  if(!prev) return;
+  $("fWeight").value = prev.weight ?? "";
+  $("fBmi").value = prev.bmi ?? "";
+  $("fFat").value = prev.fat ?? "";
+  $("fMuscle").value = prev.muscle ?? "";
+  $("fVisceral").value = prev.visceral ?? "";
+  $("fBmr").value = prev.bmr ?? "";
+  $("fAge").value = prev.age ?? "";
+}
+
 function clearFormKeepDate(){
   const d = $("fDate").value;
   fillForm(null);
   $("fDate").value = d;
   $("deleteBtn").disabled = true;
+}
+
+async function loadEntryForDate(date, {announce=false} = {}){
+  const got = await dbGet(date);
+  if(got){
+    fillForm(got);
+    if(announce) $("importResult").textContent = "既存データを読み込みました。";
+    return;
+  }
+
+  fillPreviousNumbers(await getPreviousEntry(date));
+  if(announce) $("importResult").textContent = "";
 }
 
 function getFormEntry(){
@@ -246,7 +259,6 @@ function renderTable(entries, latestISO){
       $("fDate").value = e.date;
       const got = await dbGet(e.date);
       fillForm(got);
-      setHints(await getPreviousEntry(e.date));
       window.scrollTo({top:0, behavior:"smooth"});
     });
     tbody.appendChild(tr);
@@ -295,7 +307,17 @@ function renderChart(entries, latestISO){
 
   function addSeries(label, key, yAxisID){
     const data = rows.map(e=>Number.isFinite(e[key]) ? e[key] : null);
-    ds.push({ label, data, tension:0.25, spanGaps:true, yAxisID });
+    ds.push({
+      label,
+      data,
+      tension:0.25,
+      spanGaps:true,
+      yAxisID,
+      borderWidth:1.5,
+      pointRadius:1.5,
+      pointHoverRadius:3,
+      pointHitRadius:10
+    });
     if(showMA){
       ds.push({
         label: `${label} (7日平均)`,
@@ -303,6 +325,10 @@ function renderChart(entries, latestISO){
         tension:0.25,
         spanGaps:true,
         yAxisID,
+        borderWidth:1.25,
+        pointRadius:0,
+        pointHoverRadius:2,
+        pointHitRadius:10,
         borderDash:[6,6]
       });
     }
@@ -401,7 +427,6 @@ async function refreshUI(){
   renderDashboard(all);
   renderTable(all, latestISO);
   renderChart(all, latestISO);
-  setHints(await getPreviousEntry(toISODate($("fDate").value)));
 }
 
 // --- CSV ---
@@ -637,6 +662,53 @@ function selectView(viewId){
   }
 }
 
+function formatStepValue(value, delta){
+  const decimals = Number.isInteger(delta) ? 0 : 1;
+  return decimals === 0 ? String(Math.round(value)) : value.toFixed(decimals);
+}
+
+function stepInput(stepButton){
+  const input = $(stepButton.dataset.id);
+  const delta = Number(stepButton.dataset.delta);
+  const cur = numOrNull(input.value) ?? 0;
+  const factor = Number.isInteger(delta) ? 1 : 10;
+  const next = Math.round((cur + delta) * factor) / factor;
+  input.value = formatStepValue(next, delta);
+}
+
+function setupSteppers(){
+  document.querySelectorAll(".step").forEach(button=>{
+    let holdTimer = null;
+    let repeatDelay = 180;
+
+    const stop = ()=>{
+      if(holdTimer){
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+    };
+
+    const repeat = ()=>{
+      stepInput(button);
+      repeatDelay = Math.max(45, Math.round(repeatDelay * 0.82));
+      holdTimer = setTimeout(repeat, repeatDelay);
+    };
+
+    button.addEventListener("pointerdown", (e)=>{
+      e.preventDefault();
+      button.setPointerCapture?.(e.pointerId);
+      stop();
+      repeatDelay = 180;
+      stepInput(button);
+      holdTimer = setTimeout(repeat, 420);
+    });
+    button.addEventListener("pointerup", stop);
+    button.addEventListener("pointercancel", stop);
+    button.addEventListener("pointerleave", stop);
+    button.addEventListener("lostpointercapture", stop);
+  });
+}
+
 // --- events ---
 function setupEvents(){
   document.querySelectorAll(".tab").forEach(tab=>{
@@ -650,7 +722,6 @@ function setupEvents(){
     await dbPut(entry);
     $("importResult").textContent = "保存しました。";
     $("deleteBtn").disabled = false;
-    setHints(await getPreviousEntry(entry.date));
     await refreshUI();
   });
 
@@ -678,15 +749,7 @@ function setupEvents(){
     await refreshUI();
   });
 
-  document.querySelectorAll(".step").forEach(el=>{
-    el.addEventListener("click", ()=>{
-      const id = el.dataset.id;
-      const delta = Number(el.dataset.delta);
-      const cur = numOrNull($(id).value) ?? 0;
-      const next = Math.round((cur + delta) * 10) / 10;
-      $(id).value = next.toFixed(1);
-    });
-  });
+  setupSteppers();
 
   $("importBtn").addEventListener("click", async ()=> startImportCSV($("csvFile").files?.[0]));
   $("exportCsvBtn").addEventListener("click", exportCSV);
@@ -695,17 +758,7 @@ function setupEvents(){
 
   $("fDate").addEventListener("change", async ()=>{
     const date = toISODate($("fDate").value);
-    const got = await dbGet(date);
-    if(got){
-      fillForm(got);
-      $("importResult").textContent = "既存データを読み込みました。";
-      $("deleteBtn").disabled = false;
-    }else{
-      $("importResult").textContent = "";
-      $("deleteBtn").disabled = true;
-      fillForm(null);
-    }
-    setHints(await getPreviousEntry(date));
+    await loadEntryForDate(date, {announce:true});
   });
 
   $("applyOverwriteAll").addEventListener("click", ()=>applyImport("overwriteAll"));
@@ -729,6 +782,7 @@ async function init(){
   setupInstallUI();
   setupEvents();
   selectView("viewInput");
+  await loadEntryForDate(toISODate($("fDate").value));
   await refreshUI();
 }
 init();
