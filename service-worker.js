@@ -1,12 +1,12 @@
-const CACHE_NAME = "bodylog-shell-v3-20251229";
+const CACHE_NAME = "bodylog-shell-v3-20251229-pages-path";
 const APP_SHELL = [
-  "/",
-  "/index.html",
-  "/styles.css",
-  "/app.js",
-  "/manifest.webmanifest",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png"
+  "./",
+  "./index.html",
+  "./styles.css",
+  "./app.js",
+  "./manifest.webmanifest",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png"
 ];
 
 self.addEventListener("install", (event) => {
