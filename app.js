@@ -184,12 +184,6 @@ function sortEntries(arr){
   return arr.sort((a,b)=> state.sortDesc ? (b.date.localeCompare(a.date)) : (a.date.localeCompare(b.date)));
 }
 
-function calcAvg(arr, key){
-  const vals = arr.map(x=>x[key]).filter(v=>Number.isFinite(v));
-  if(!vals.length) return null;
-  return vals.reduce((p,c)=>p+c,0)/vals.length;
-}
-
 function movingAvg(points, key, window=7){
   const out = [];
   for(let i=0;i<points.length;i++){
@@ -730,7 +724,18 @@ async function init(){
   // SW（オフライン化）
   if("serviceWorker" in navigator){
     try{
-      await navigator.serviceWorker.register("./service-worker.js");
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener("controllerchange", ()=>{
+        if(refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      });
+
+      const registration = await navigator.serviceWorker.register("./service-worker.js");
+      await registration.update();
+      if(registration.waiting){
+        registration.waiting.postMessage({ type: "SKIP_WAITING" });
+      }
     }catch(e){
       console.warn("SW register failed", e);
     }
