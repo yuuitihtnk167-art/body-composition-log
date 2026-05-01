@@ -1,0 +1,113 @@
+:root{
+  --bg:#0b1220; --card:#0f1b33; --text:#e6edf6; --muted:#a6b3c5;
+  --accent:#0f766e; --danger:#ef4444; --line:rgba(255,255,255,.10);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+  background:linear-gradient(180deg,var(--bg),#070b14); color:var(--text);
+}
+.topbar{
+  position:sticky; top:0; z-index:10;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 14px; border-bottom:1px solid var(--line);
+  backdrop-filter: blur(8px); background: rgba(11,18,32,.75);
+}
+.brand{display:flex; gap:10px; align-items:center}
+.logo{
+  width:34px; height:34px; display:grid; place-items:center;
+  border-radius:10px; background:var(--accent); color:white; font-weight:800;
+}
+.title{font-weight:800; letter-spacing:.3px}
+.subtitle{font-size:12px; color:var(--muted)}
+
+.container{max-width:860px; margin:0 auto; padding:14px; display:flex; flex-direction:column; gap:12px}
+.card{
+  background:rgba(15,27,51,.85);
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:14px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.25);
+}
+h2{margin:0 0 10px 0; font-size:16px}
+h3{margin:12px 0 10px 0; font-size:14px}
+.small{font-size:12px; color:var(--muted); margin:8px 0 0}
+
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+.kpi{border:1px solid var(--line); border-radius:14px; padding:10px}
+.kpiLabel{font-size:12px; color:var(--muted)}
+.kpiValue{font-size:18px; font-weight:800; margin-top:4px}
+.note{color:var(--muted); font-size:13px; margin:10px 0 0; white-space:pre-wrap}
+
+pre{white-space:pre-wrap; word-break:break-word; background:rgba(255,255,255,.05);
+  padding:10px; border-radius:12px; border:1px solid var(--line)
+}
+
+.form{display:flex; flex-direction:column; gap:10px}
+.row{display:flex; flex-direction:column; gap:6px}
+label{font-size:13px; color:var(--muted)}
+input,textarea,select{
+  width:100%; padding:10px 12px; border-radius:12px;
+  border:1px solid var(--line); background:rgba(255,255,255,.04); color:var(--text);
+  outline:none;
+}
+textarea{resize:vertical}
+.hint{font-size:12px; color:rgba(166,179,197,.85)}
+.withStepper{display:flex; gap:8px; align-items:center}
+.step{
+  width:40px; height:40px; border-radius:12px; border:1px solid var(--line);
+  background:rgba(255,255,255,.04); color:var(--text); font-size:18px;
+}
+.actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:4px}
+
+.btn{
+  border:1px solid var(--line);
+  background:var(--accent);
+  color:white; padding:10px 12px; border-radius:12px; font-weight:700;
+}
+.btn.ghost{background:transparent; color:var(--text)}
+.btn.danger{background:var(--danger)}
+.btn[disabled]{opacity:.5}
+
+.toolbar{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px}
+.chk{display:flex; align-items:center; gap:6px; font-size:13px; color:var(--muted)}
+.tableWrap{overflow:auto; border-radius:14px; border:1px solid var(--line)}
+table{width:100%; border-collapse:collapse; min-width:650px}
+th,td{padding:10px 10px; border-bottom:1px solid var(--line); font-size:13px}
+th{position:sticky; top:0; background:rgba(11,18,32,.85); text-align:left}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:rgba(255,255,255,.04)}
+.importActions{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
+
+.hidden{display:none !important}
+
+.conflictBox{
+  margin-top:12px;
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:14px;
+  padding:12px;
+  background:rgba(255,255,255,.03);
+}
+.conflictActions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin:10px 0;
+}
+.choice{
+  display:flex; gap:10px; align-items:center;
+}
+.choice label{color:var(--text)}
+
+/* ===== Chart area: prevent oversized canvas ===== */
+.chartWrap{
+  height: 260px;          /* 好みで 220〜320 で調整OK */
+}
+
+#chart{
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
