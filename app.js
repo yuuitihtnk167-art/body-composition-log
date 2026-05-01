@@ -238,10 +238,11 @@ function renderTable(entries, latestISO){
   for(const e of rows){
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${e.date}</td><td>${e.weight ?? ""}</td><td>${e.fat ?? ""}</td><td>${e.muscle ?? ""}</td>
+      <td>${e.date}</td><td>${e.weight ?? ""}</td><td>${e.bmi ?? ""}</td><td>${e.fat ?? ""}</td><td>${e.muscle ?? ""}</td>
       <td>${e.visceral ?? ""}</td><td>${e.bmr ?? ""}</td><td>${e.age ?? ""}</td>
     `;
     tr.addEventListener("click", async ()=>{
+      selectView("viewInput");
       $("fDate").value = e.date;
       const got = await dbGet(e.date);
       fillForm(got);
@@ -307,12 +308,14 @@ function renderChart(entries, latestISO){
     }
   }
 
-  // kg: left axis / %: right axis
+  // kg: left axis / % and BMI: right axes
   const showW = $("cW").checked;
+  const showB = $("cB").checked;
   const showM = $("cM").checked;
   const showF = $("cF").checked;
 
   if(showW) addSeries("体重","weight","yKg");
+  if(showB) addSeries("BMI","bmi","yBmi");
   if(showM) addSeries("筋肉量","muscle","yKg");
   if(showF) addSeries("体脂肪率","fat","yPct");
 
@@ -322,9 +325,12 @@ function renderChart(entries, latestISO){
   if(showM) kgVals.push(...rows.map(r=>r.muscle));
   const pctVals = [];
   if(showF) pctVals.push(...rows.map(r=>r.fat));
+  const bmiVals = [];
+  if(showB) bmiVals.push(...rows.map(r=>r.bmi));
 
   const kgMM = axisMinMax(kgVals, {minPad: 0.8, padRatio: 0.18});
   const pctMM = axisMinMax(pctVals, {minPad: 1.2, padRatio: 0.22});
+  const bmiMM = axisMinMax(bmiVals, {minPad: 0.8, padRatio: 0.18});
 
   const ctx = $("chart").getContext("2d");
   if(state.chart) state.chart.destroy();
@@ -374,6 +380,14 @@ function renderChart(entries, latestISO){
           title:{ display:true, text:"%", color:"#a6b3c5" },
           min: pctMM.min,
           max: pctMM.max
+        },
+        yBmi:{
+          position:"right",
+          ticks:{ color:"#a6b3c5" },
+          grid:{ drawOnChartArea:false },
+          title:{ display:true, text:"BMI", color:"#a6b3c5" },
+          min: bmiMM.min,
+          max: bmiMM.max
         }
       }
     }
@@ -606,8 +620,29 @@ function setupInstallUI(){
   });
 }
 
+// --- views ---
+function selectView(viewId){
+  document.querySelectorAll(".view").forEach(view=>{
+    view.classList.toggle("hidden", view.id !== viewId);
+  });
+
+  document.querySelectorAll(".tab").forEach(tab=>{
+    const active = tab.dataset.view === viewId;
+    tab.classList.toggle("active", active);
+    tab.setAttribute("aria-selected", active ? "true" : "false");
+  });
+
+  if(viewId === "viewChart"){
+    setTimeout(()=>{ if(state.chart) state.chart.resize(); }, 150);
+  }
+}
+
 // --- events ---
 function setupEvents(){
+  document.querySelectorAll(".tab").forEach(tab=>{
+    tab.addEventListener("click", ()=>selectView(tab.dataset.view));
+  });
+
   $("entryForm").addEventListener("submit", async (e)=>{
     e.preventDefault();
     const entry = getFormEntry();
@@ -656,7 +691,7 @@ function setupEvents(){
   $("importBtn").addEventListener("click", async ()=> startImportCSV($("csvFile").files?.[0]));
   $("exportCsvBtn").addEventListener("click", exportCSV);
 
-  ["cW","cF","cM","cMA"].forEach(id=>$(id).addEventListener("change", refreshUI));
+  ["cW","cB","cF","cM","cMA"].forEach(id=>$(id).addEventListener("change", refreshUI));
 
   $("fDate").addEventListener("change", async ()=>{
     const date = toISODate($("fDate").value);
@@ -693,6 +728,7 @@ async function init(){
 
   setupInstallUI();
   setupEvents();
+  selectView("viewInput");
   await refreshUI();
 }
 init();

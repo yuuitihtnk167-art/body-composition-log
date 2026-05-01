@@ -23,6 +23,30 @@ body{
 .title{font-weight:800; letter-spacing:.3px}
 .subtitle{font-size:12px; color:var(--muted)}
 
+.tabs{
+  position:sticky;
+  top:59px;
+  z-index:9;
+  display:grid;
+  grid-template-columns:repeat(4, 1fr);
+  border-bottom:1px solid var(--line);
+  background:rgba(11,18,32,.85);
+  backdrop-filter:blur(8px);
+}
+.tab{
+  appearance:none;
+  border:0;
+  border-bottom:3px solid transparent;
+  background:transparent;
+  color:var(--muted);
+  padding:12px 6px;
+  font-weight:700;
+}
+.tab.active{
+  color:var(--text);
+  border-bottom-color:var(--accent);
+}
+
 .container{max-width:860px; margin:0 auto; padding:14px; display:flex; flex-direction:column; gap:12px}
 .card{
   background:rgba(15,27,51,.85);
@@ -74,7 +98,7 @@ textarea{resize:vertical}
 .toolbar{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px}
 .chk{display:flex; align-items:center; gap:6px; font-size:13px; color:var(--muted)}
 .tableWrap{overflow:auto; border-radius:14px; border:1px solid var(--line)}
-table{width:100%; border-collapse:collapse; min-width:650px}
+table{width:100%; border-collapse:collapse; min-width:720px}
 th,td{padding:10px 10px; border-bottom:1px solid var(--line); font-size:13px}
 th{position:sticky; top:0; background:rgba(11,18,32,.85); text-align:left}
 tbody tr{cursor:pointer}
