@@ -685,7 +685,7 @@ async function init(){
   // SW（オフライン化）
   if("serviceWorker" in navigator){
     try{
-      await navigator.serviceWorker.register("/service-worker.js", { scope: "/" });
+      await navigator.serviceWorker.register("./service-worker.js");
     }catch(e){
       console.warn("SW register failed", e);
     }
