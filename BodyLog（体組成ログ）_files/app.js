@@ -171,12 +171,6 @@ function sortEntries(arr){
   return arr.sort((a,b)=> state.sortDesc ? (b.date.localeCompare(a.date)) : (a.date.localeCompare(b.date)));
 }
 
-function calcAvg(arr, key){
-  const vals = arr.map(x=>x[key]).filter(v=>Number.isFinite(v));
-  if(!vals.length) return null;
-  return vals.reduce((p,c)=>p+c,0)/vals.length;
-}
-
 function movingAvg(points, key, window=7){
   const out = [];
   for(let i=0;i<points.length;i++){
@@ -185,48 +179,6 @@ function movingAvg(points, key, window=7){
     out.push(slice.length ? slice.reduce((p,c)=>p+c,0)/slice.length : null);
   }
   return out;
-}
-
-function renderDashboard(entries){
-  if(!entries.length){
-    $("kpiDate").textContent = "-";
-    $("kpiW7").textContent = "-";
-    $("dashNote").textContent = "まだデータがありません。CSVインポートか今日の入力から始めてください。";
-    return;
-  }
-
-  const latestISO = entries.reduce((p,c)=> (p > c.date ? p : c.date), entries[0].date);
-  $("kpiDate").textContent = latestISO;
-
-  const latestDate = dateFromISO(latestISO);
-  const last7 = entries.filter(e=>{
-    const d = dateFromISO(e.date);
-    if(!d || !latestDate) return false;
-    const diff = (latestDate - d)/(1000*60*60*24);
-    return diff>=0 && diff<=6;
-  });
-
-  const w7 = calcAvg(last7,"weight");
-  $("kpiW7").textContent = (w7===null) ? "-" : `${w7.toFixed(1)} kg`;
-
-  const prev7 = entries.filter(e=>{
-    const d = dateFromISO(e.date);
-    if(!d || !latestDate) return false;
-    const diff = (latestDate - d)/(1000*60*60*24);
-    return diff>=7 && diff<=13;
-  });
-
-  const wPrev = calcAvg(prev7,"weight");
-
-  if(w7!==null && wPrev!==null){
-    const delta = w7 - wPrev;
-    const sign = delta>0? "+" : "";
-    $("dashNote").textContent = `直近7日平均の体重は ${w7.toFixed(1)}kg。前7日平均との差は ${sign}${delta.toFixed(1)}kg。`;
-  }else if(w7!==null){
-    $("dashNote").textContent = `直近7日平均の体重は ${w7.toFixed(1)}kg。`;
-  }else{
-    $("dashNote").textContent = "";
-  }
 }
 
 function renderTable(entries, latestISO){
@@ -384,7 +336,6 @@ async function refreshUI(){
   const all = await dbGetAll();
   const latestISO = all.length ? all.reduce((p,c)=> (p > c.date ? p : c.date), all[0].date) : null;
 
-  renderDashboard(all);
   renderTable(all, latestISO);
   renderChart(all, latestISO);
   setHints(await getPreviousEntry(toISODate($("fDate").value)));

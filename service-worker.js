@@ -1,4 +1,4 @@
-const CACHE_NAME = "bodylog-shell-v3-20260501-input-ui";
+const CACHE_NAME = "bodylog-shell-v3-20260501-network-first";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -26,21 +26,31 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-  event.respondWith(
-    caches.match(req).then((cached) => {
+  if (req.method !== "GET") return;
+
+  event.respondWith((async () => {
+    const cached = await caches.match(req);
+
+    try {
+      const res = await fetch(req);
+      const sameOrigin = new URL(req.url).origin === self.location.origin;
+      if (sameOrigin && res.ok) {
+        const copy = res.clone();
+        const cache = await caches.open(CACHE_NAME);
+        await cache.put(req, copy);
+      }
+      return res;
+    } catch (e) {
       if (cached) return cached;
-      return fetch(req).then((res) => {
-        // 同一オリジンのGETだけキャッシュ（安全側）
-        const isGet = req.method === "GET";
-        const sameOrigin = new URL(req.url).origin === self.location.origin;
-        if (isGet && sameOrigin) {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(req, copy));
-        }
-        return res;
-      }).catch(() => cached);
-    })
-  );
+      throw e;
+    }
+  })());
 });
