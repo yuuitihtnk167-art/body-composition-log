@@ -1,0 +1,118 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isApproved() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.approved == true;
+    }
+
+    function isApprovedOwner(uid) {
+      return isOwner(uid)
+        && exists(/databases/$(database)/documents/users/$(uid))
+        && get(/databases/$(database)/documents/users/$(uid)).data.approved == true;
+    }
+
+    function nullableNumber(value) {
+      return value == null || value is number;
+    }
+
+    function allowedUserCreate(uid) {
+      return isOwner(uid)
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.displayName is string
+        && request.resource.data.photoURL is string
+        && request.resource.data.approved == false
+        && request.resource.data.role == "user"
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.keys().hasOnly([
+          "uid",
+          "email",
+          "displayName",
+          "photoURL",
+          "approved",
+          "role",
+          "createdAt"
+        ]);
+    }
+
+    function allowedUserUpdate(uid) {
+      return isOwner(uid)
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          "email",
+          "displayName",
+          "photoURL"
+        ])
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.approved == resource.data.approved
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function allowedEntryWrite(date) {
+      return request.resource.data.keys().hasOnly([
+          "date",
+          "weight",
+          "bmi",
+          "fat",
+          "muscle",
+          "visceral",
+          "bmr",
+          "age",
+          "updatedAt"
+        ])
+        && request.resource.data.keys().hasAll([
+          "date",
+          "weight",
+          "bmi",
+          "fat",
+          "muscle",
+          "visceral",
+          "bmr",
+          "age",
+          "updatedAt"
+        ])
+        && request.resource.data.date == date
+        && request.resource.data.date is string
+        && nullableNumber(request.resource.data.weight)
+        && nullableNumber(request.resource.data.bmi)
+        && nullableNumber(request.resource.data.fat)
+        && nullableNumber(request.resource.data.muscle)
+        && nullableNumber(request.resource.data.visceral)
+        && nullableNumber(request.resource.data.bmr)
+        && nullableNumber(request.resource.data.age)
+        && request.resource.data.updatedAt is number;
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      allow create: if allowedUserCreate(uid);
+      allow update: if allowedUserUpdate(uid);
+      allow delete: if false;
+
+      match /entries/{date} {
+        allow read, delete: if isApprovedOwner(uid);
+        allow create, update: if isApprovedOwner(uid) && allowedEntryWrite(date);
+      }
+    }
+
+    match /protected/{document=**} {
+      allow read, write: if isApproved();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

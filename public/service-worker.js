@@ -1,9 +1,7 @@
-const CACHE_NAME = "bodylog-shell-v3-20260501-network-first";
+const CACHE_NAME = "bodylog-shell-v13-20260510-thinner-chart-lines";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css",
-  "./app.js",
   "./manifest.webmanifest",
   "./icons/icon-180.png",
   "./icons/icon-192.png",
