@@ -1,5 +1,4 @@
 import { initializeApp } from "firebase/app";
-
 import {
   getAuth,
   GoogleAuthProvider,
@@ -18,25 +17,40 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-console.log(import.meta.env.VITE_FIREBASE_API_KEY);
+export const missingConfigKeys = Object.entries(firebaseConfig)
+  .filter(([, value]) => !value)
+  .map(([key]) => key);
 
-const app = initializeApp(firebaseConfig);
+export const isFirebaseConfigured = missingConfigKeys.length === 0;
 
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+if (!isFirebaseConfigured) {
+  console.warn(`Firebase environment variables are missing: ${missingConfigKeys.join(", ")}`);
+}
+
+const app = isFirebaseConfigured ? initializeApp(firebaseConfig) : null;
+
+export const auth = app ? getAuth(app) : null;
+export const db = app ? getFirestore(app) : null;
 
 const provider = new GoogleAuthProvider();
+provider.setCustomParameters({
+  prompt: "select_account",
+});
 
 export const signInWithGoogle = async () => {
+  if (!auth) {
+    throw new Error("Firebase is not configured. Create a local .env file from .env.example.");
+  }
+
   return signInWithPopup(auth, provider);
 };
 
 export const logOut = async () => {
+  if (!auth) {
+    throw new Error("Firebase is not configured. Create a local .env file from .env.example.");
+  }
+
   return signOut(auth);
 };
-
-export const missingConfigKeys = [];
-
-export const isFirebaseConfigured = true;
 
 export default app;
