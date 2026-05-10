@@ -4,6 +4,7 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
+  base: "./",
   build: {
     outDir: "dist",
     emptyOutDir: true,

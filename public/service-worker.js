@@ -1,4 +1,4 @@
-const CACHE_NAME = "bodylog-shell-v13-20260510-thinner-chart-lines";
+const CACHE_NAME = "bodylog-shell-v14-20260510-github-pages-base";
 const APP_SHELL = [
   "./",
   "./index.html",
