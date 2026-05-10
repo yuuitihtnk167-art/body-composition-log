@@ -4,7 +4,7 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
-  base: "./",
+　base: "/body-composition-log/",
   build: {
     outDir: "dist",
     emptyOutDir: true,
