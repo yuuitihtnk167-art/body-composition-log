@@ -1,4 +1,4 @@
-const CACHE_NAME = "bodylog-shell-v14-20260510-github-pages-base";
+const CACHE_NAME = "bodylog-shell-v15-20260510-stepper-hold";
 const APP_SHELL = [
   "./",
   "./index.html",
