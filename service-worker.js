@@ -1,8 +1,10 @@
-const CACHE_NAME = "bodylog-shell-v15-20260510-stepper-hold";
+const CACHE_NAME = "bodylog-shell-v16-20260512-pages-root";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
+  "./assets/index-CuHvFfzb.js",
+  "./assets/index-BA8Fp_aC.css",
   "./icons/icon-180.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png"
