@@ -617,6 +617,7 @@ export default function App() {
   const csvFileInputRef = useRef(null);
   const initialEntryLoadedRef = useRef(false);
   const entriesRequestIdRef = useRef(0);
+  const stepHoldRef = useRef({ timerId: null, repeatDelay: 180 });
   const [series, setSeries] = useState({
     weight: true,
     bmi: true,
@@ -776,6 +777,8 @@ export default function App() {
       .catch((error) => console.warn("Service Worker registration failed", error));
   }, []);
 
+  useEffect(() => stopStepHold, []);
+
   async function handleSignIn() {
     setAuthError("");
     setAuthLoading(true);
@@ -832,10 +835,45 @@ export default function App() {
   }
 
   function stepField(key, step) {
-    const current = numberOrNull(form[key]) ?? 0;
-    const factor = Number.isInteger(step) ? 1 : 10;
-    const next = Math.round((current + step) * factor) / factor;
-    updateFormField(key, formatStepValue(next, step));
+    setForm((currentForm) => {
+      const current = numberOrNull(currentForm[key]) ?? 0;
+      const factor = Number.isInteger(step) ? 1 : 10;
+      const next = Math.round((current + step) * factor) / factor;
+      return {
+        ...currentForm,
+        [key]: formatStepValue(next, step),
+      };
+    });
+  }
+
+  function stopStepHold() {
+    if (!stepHoldRef.current.timerId) return;
+
+    clearTimeout(stepHoldRef.current.timerId);
+    stepHoldRef.current.timerId = null;
+  }
+
+  function repeatStep(key, step) {
+    stepField(key, step);
+    stepHoldRef.current.repeatDelay = Math.max(45, Math.round(stepHoldRef.current.repeatDelay * 0.82));
+    stepHoldRef.current.timerId = window.setTimeout(
+      () => repeatStep(key, step),
+      stepHoldRef.current.repeatDelay
+    );
+  }
+
+  function startStepHold(event, key, step) {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    stopStepHold();
+    stepHoldRef.current.repeatDelay = 180;
+    stepField(key, step);
+    stepHoldRef.current.timerId = window.setTimeout(() => repeatStep(key, step), 420);
+  }
+
+  function handleStepClick(event, key, step) {
+    if (event.detail !== 0) return;
+    stepField(key, step);
   }
 
   async function handleSave(event) {
@@ -1062,7 +1100,16 @@ export default function App() {
                         {field.label}{field.unit ? ` (${field.unit})` : ""}
                       </label>
                       <div className="withStepper">
-                        <button className="step" type="button" onClick={() => stepField(field.key, -field.step)}>
+                        <button
+                          className="step"
+                          type="button"
+                          onPointerDown={(event) => startStepHold(event, field.key, -field.step)}
+                          onPointerUp={stopStepHold}
+                          onPointerCancel={stopStepHold}
+                          onPointerLeave={stopStepHold}
+                          onLostPointerCapture={stopStepHold}
+                          onClick={(event) => handleStepClick(event, field.key, -field.step)}
+                        >
                           -
                         </button>
                         <input
@@ -1072,7 +1119,16 @@ export default function App() {
                           value={form[field.key]}
                           onChange={(event) => updateFormField(field.key, event.target.value)}
                         />
-                        <button className="step" type="button" onClick={() => stepField(field.key, field.step)}>
+                        <button
+                          className="step"
+                          type="button"
+                          onPointerDown={(event) => startStepHold(event, field.key, field.step)}
+                          onPointerUp={stopStepHold}
+                          onPointerCancel={stopStepHold}
+                          onPointerLeave={stopStepHold}
+                          onLostPointerCapture={stopStepHold}
+                          onClick={(event) => handleStepClick(event, field.key, field.step)}
+                        >
                           +
                         </button>
                       </div>
