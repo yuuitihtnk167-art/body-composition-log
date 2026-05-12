@@ -4,5 +4,7 @@
 node_modules/
 dist/
 .vite/
+.chrome-check/
+white-screen-check.png
 server.err.log
 server.out.log
