@@ -1,4 +1,4 @@
-const CACHE_NAME = "bodylog-shell-v18-20260530-pages-root";
+const CACHE_NAME = "bodylog-shell-v19-20260530-pages-root";
 const APP_SHELL = [
   "./",
   "./index.html",

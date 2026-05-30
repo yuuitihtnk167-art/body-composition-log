@@ -846,15 +846,26 @@ export default function App() {
     });
   }
 
-  function blurActiveInput() {
-    const activeElement = document.activeElement;
-    if (activeElement instanceof HTMLInputElement) {
-      activeElement.blur();
-    }
+  function restoreScrollPosition(scrollX, scrollY) {
+    window.scrollTo(scrollX, scrollY);
+    window.requestAnimationFrame(() => window.scrollTo(scrollX, scrollY));
+    window.setTimeout(() => window.scrollTo(scrollX, scrollY), 80);
   }
 
-  function blurActiveInputSoon() {
-    window.setTimeout(blurActiveInput, 0);
+  function blurActiveNumberInputSoon() {
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+
+    window.setTimeout(() => {
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLInputElement &&
+        (activeElement.inputMode === "decimal" || activeElement.inputMode === "numeric")
+      ) {
+        activeElement.blur();
+      }
+      restoreScrollPosition(scrollX, scrollY);
+    }, 0);
   }
 
   function stopStepHold() {
@@ -866,7 +877,7 @@ export default function App() {
 
   function finishStepHold() {
     stopStepHold();
-    blurActiveInputSoon();
+    blurActiveNumberInputSoon();
   }
 
   function repeatStep(key, step) {
@@ -890,7 +901,7 @@ export default function App() {
   function handleStepClick(event, key, step) {
     if (event.detail !== 0) return;
     stepField(key, step);
-    blurActiveInputSoon();
+    blurActiveNumberInputSoon();
   }
 
   async function handleSave(event) {
