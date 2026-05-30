@@ -846,6 +846,23 @@ export default function App() {
     });
   }
 
+  function isVirtualKeyboardOpen() {
+    const viewport = window.visualViewport;
+    if (!viewport) return false;
+
+    return window.innerHeight - viewport.height > 120;
+  }
+
+  function blurFocusedNumberInputIfKeyboardClosed() {
+    const activeElement = document.activeElement;
+    if (!(activeElement instanceof HTMLInputElement)) return;
+
+    const isNumberInput = activeElement.inputMode === "decimal" || activeElement.inputMode === "numeric";
+    if (!isNumberInput || isVirtualKeyboardOpen()) return;
+
+    activeElement.blur();
+  }
+
   function stopStepHold() {
     if (!stepHoldRef.current.timerId) return;
 
@@ -864,6 +881,7 @@ export default function App() {
 
   function startStepHold(event, key, step) {
     event.preventDefault();
+    blurFocusedNumberInputIfKeyboardClosed();
     event.currentTarget.setPointerCapture?.(event.pointerId);
     stopStepHold();
     stepHoldRef.current.repeatDelay = 180;
@@ -873,6 +891,7 @@ export default function App() {
 
   function handleStepClick(event, key, step) {
     if (event.detail !== 0) return;
+    blurFocusedNumberInputIfKeyboardClosed();
     stepField(key, step);
   }
 
