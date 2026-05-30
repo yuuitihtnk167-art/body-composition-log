@@ -846,38 +846,11 @@ export default function App() {
     });
   }
 
-  function restoreScrollPosition(scrollX, scrollY) {
-    window.scrollTo(scrollX, scrollY);
-    window.requestAnimationFrame(() => window.scrollTo(scrollX, scrollY));
-    window.setTimeout(() => window.scrollTo(scrollX, scrollY), 80);
-  }
-
-  function blurActiveNumberInputSoon() {
-    const scrollX = window.scrollX;
-    const scrollY = window.scrollY;
-
-    window.setTimeout(() => {
-      const activeElement = document.activeElement;
-      if (
-        activeElement instanceof HTMLInputElement &&
-        (activeElement.inputMode === "decimal" || activeElement.inputMode === "numeric")
-      ) {
-        activeElement.blur();
-      }
-      restoreScrollPosition(scrollX, scrollY);
-    }, 0);
-  }
-
   function stopStepHold() {
     if (!stepHoldRef.current.timerId) return;
 
     clearTimeout(stepHoldRef.current.timerId);
     stepHoldRef.current.timerId = null;
-  }
-
-  function finishStepHold() {
-    stopStepHold();
-    blurActiveNumberInputSoon();
   }
 
   function repeatStep(key, step) {
@@ -901,7 +874,6 @@ export default function App() {
   function handleStepClick(event, key, step) {
     if (event.detail !== 0) return;
     stepField(key, step);
-    blurActiveNumberInputSoon();
   }
 
   async function handleSave(event) {
@@ -1132,10 +1104,10 @@ export default function App() {
                           className="step"
                           type="button"
                           onPointerDown={(event) => startStepHold(event, field.key, -field.step)}
-                          onPointerUp={finishStepHold}
-                          onPointerCancel={finishStepHold}
-                          onPointerLeave={finishStepHold}
-                          onLostPointerCapture={finishStepHold}
+                          onPointerUp={stopStepHold}
+                          onPointerCancel={stopStepHold}
+                          onPointerLeave={stopStepHold}
+                          onLostPointerCapture={stopStepHold}
                           onClick={(event) => handleStepClick(event, field.key, -field.step)}
                         >
                           -
@@ -1151,10 +1123,10 @@ export default function App() {
                           className="step"
                           type="button"
                           onPointerDown={(event) => startStepHold(event, field.key, field.step)}
-                          onPointerUp={finishStepHold}
-                          onPointerCancel={finishStepHold}
-                          onPointerLeave={finishStepHold}
-                          onLostPointerCapture={finishStepHold}
+                          onPointerUp={stopStepHold}
+                          onPointerCancel={stopStepHold}
+                          onPointerLeave={stopStepHold}
+                          onLostPointerCapture={stopStepHold}
                           onClick={(event) => handleStepClick(event, field.key, field.step)}
                         >
                           +
