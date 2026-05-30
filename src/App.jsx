@@ -846,6 +846,13 @@ export default function App() {
     });
   }
 
+  function blurActiveInput() {
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLInputElement) {
+      activeElement.blur();
+    }
+  }
+
   function stopStepHold() {
     if (!stepHoldRef.current.timerId) return;
 
@@ -868,12 +875,14 @@ export default function App() {
     stopStepHold();
     stepHoldRef.current.repeatDelay = 180;
     stepField(key, step);
+    blurActiveInput();
     stepHoldRef.current.timerId = window.setTimeout(() => repeatStep(key, step), 420);
   }
 
   function handleStepClick(event, key, step) {
     if (event.detail !== 0) return;
     stepField(key, step);
+    blurActiveInput();
   }
 
   async function handleSave(event) {
