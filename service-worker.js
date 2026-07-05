@@ -1,10 +1,8 @@
-const CACHE_NAME = "bodylog-shell-v21-20260530-pages-root";
+const CACHE_NAME = "bodylog-shell-v22";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./assets/index-CuHvFfzb.js",
-  "./assets/index-BA8Fp_aC.css",
   "./icons/icon-180.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png"
