@@ -424,6 +424,23 @@ function getImportErrorMessage(error) {
   return `CSV\u30a4\u30f3\u30dd\u30fc\u30c8\u306b\u5931\u6557\u3057\u307e\u3057\u305f: ${error.message}`;
 }
 
+function dailyChartLabels(rows) {
+  if (rows.length === 0) return [];
+
+  const labels = [];
+  const date = new Date(`${rows[0].date}T00:00:00Z`);
+  const lastDate = rows[rows.length - 1].date;
+
+  while (!Number.isNaN(date.getTime())) {
+    const dateISO = date.toISOString().slice(0, 10);
+    if (dateISO > lastDate) break;
+    labels.push(dateISO);
+    date.setUTCDate(date.getUTCDate() + 1);
+  }
+
+  return labels;
+}
+
 function ChartPanel({ entries, rangeDays, series }) {
   const canvasRef = useRef(null);
   const chartRef = useRef(null);
@@ -438,7 +455,8 @@ function ChartPanel({ entries, rangeDays, series }) {
       .filter((entry) => withinRange(entry.date, latestISO, rangeDays))
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    const labels = rows.map((entry) => entry.date);
+    const labels = dailyChartLabels(rows);
+    const rowsByDate = new Map(rows.map((entry) => [entry.date, entry]));
     const datasets = [];
 
     const addSeries = (label, key, yAxisID) => {
@@ -446,7 +464,10 @@ function ChartPanel({ entries, rangeDays, series }) {
 
       datasets.push({
         label,
-        data: rows.map((entry) => (Number.isFinite(entry[key]) ? entry[key] : null)),
+        data: labels.map((date) => {
+          const value = rowsByDate.get(date)?.[key];
+          return Number.isFinite(value) ? value : null;
+        }),
         tension: 0.25,
         spanGaps: true,
         yAxisID,
@@ -462,9 +483,12 @@ function ChartPanel({ entries, rangeDays, series }) {
       });
 
       if (series.movingAverage) {
+        // Keep the average based on measurement records, not the added empty days.
+        const averages = movingAverage(rows, key, 7);
+        const averagesByDate = new Map(rows.map((entry, index) => [entry.date, averages[index]]));
         datasets.push({
           label: `${label} (${text.movingAverage})`,
-          data: movingAverage(rows, key, 7),
+          data: labels.map((date) => averagesByDate.get(date) ?? null),
           tension: 0.25,
           spanGaps: true,
           yAxisID,
